@@ -4,7 +4,7 @@ def mostra_hsv(event, x, y, flags, param):
     if event == cv2.EVENT_LBUTTONDOWN:
         print(f"HSV em ({x},{y}): {param[y,x]}")
 
-img = cv2.imread("Eucalipto1.jpg")
+img = cv2.imread(r"C:\Users\pedro\Documents\INSPER\SEM_07\VISAO\Projeto1\_Eucalipto_Escolhidos1\Eucalipto5.jpg")
 img_hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
 cv2.imshow("Clique na imagem", img)
 cv2.setMouseCallback("Clique na imagem", mostra_hsv, img_hsv)
