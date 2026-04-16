@@ -1,0 +1,110 @@
+import cv2
+import numpy as np
+
+# ------------------ IMAGENS ------------------
+img_1 = cv2.imread("Projeto1/_Eucalipto_Escolhidos1/Eucalipto1.jpg", cv2.IMREAD_COLOR)
+img_2 = cv2.imread("Projeto1/_Eucalipto_Escolhidos1/Eucalipto2.jpg", cv2.IMREAD_COLOR)
+img_3 = cv2.imread("Projeto1/_Eucalipto_Escolhidos1/Eucalipto3.jpg", cv2.IMREAD_COLOR)
+img_4 = cv2.imread("Projeto1/_Eucalipto_Escolhidos1/Eucalipto4.jpg", cv2.IMREAD_COLOR)
+img_5 = cv2.imread("Projeto1/_Eucalipto_Escolhidos1/Eucalipto5.jpg", cv2.IMREAD_COLOR)
+
+imagens = [img_1, img_2, img_3, img_4, img_5]
+
+lower_azul = np.array([100, 120, 150])
+upper_azul = np.array([120, 255, 255])
+
+# ------------------ KERNEL INICIAL ------------------
+k1, k2 = 10, 10
+
+# ------------------ LOOP ------------------
+while True:
+
+    print(f"\nKernel atual: ({k1}, {k2})")
+
+    imagens_resultado = []
+
+    for img_1 in imagens:
+
+        altura, largura, _ = img_1.shape
+        ini = int(altura * 0.69)
+
+        rec = img_1[0:ini, 0:largura]
+        img_HSV = cv2.cvtColor(rec, cv2.COLOR_BGR2HSV)
+
+        (y,x,w)=rec.shape
+        larg=300
+        alt=int(larg*(x/y))
+
+        mask_fundo = cv2.inRange(img_HSV, lower_azul, upper_azul)
+        mask_planta = cv2.bitwise_not(mask_fundo)
+
+        resultado = cv2.bitwise_and(rec, rec, mask=mask_planta)
+        x,y,w,h = cv2.boundingRect(mask_planta)
+
+        recorte_fim=resultado[y-50:y+h+50, x-50:x+w+50]
+        mask_rec=mask_planta[y-50:y+h+50, x-50:x+w+50]
+
+        img_gray=cv2.cvtColor(recorte_fim, cv2.COLOR_BGR2GRAY)
+
+        # ------------------ KERNEL ------------------
+        kernel = np.ones((k1,k2), np.uint8)
+
+        erode=cv2.erode(img_gray, kernel, iterations=1)
+        dilate=cv2.dilate(erode, kernel, iterations=1)
+
+        contours, _ = cv2.findContours(dilate, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        if len(contours) == 0:
+            imagens_resultado.append(np.zeros((300,300,3), dtype=np.uint8))
+            continue
+
+        maior_contorno = max(contours, key=cv2.contourArea)
+
+        mask_pote = np.zeros_like(mask_rec)
+        cv2.drawContours(mask_pote, [maior_contorno], -1, 255, thickness=cv2.FILLED)
+
+        mask_fim = cv2.bitwise_not(mask_pote)
+
+        resultado = cv2.bitwise_and(recorte_fim, recorte_fim, mask=mask_fim)
+
+        ver=cv2.resize(resultado, (larg, alt))
+
+        imagens_resultado.append(ver)
+
+    # ------------------ GRID 2x3 ------------------
+    while len(imagens_resultado) < 6:
+        imagens_resultado.append(np.zeros_like(imagens_resultado[0]))
+
+    linha1 = np.hstack(imagens_resultado[:3])
+    linha2 = np.hstack(imagens_resultado[3:6])
+    grid = np.vstack([linha1, linha2])
+
+    # ------------------ TEXTO DO KERNEL ------------------
+    cv2.rectangle(grid, (5,5), (220,60), (0,0,0), -1)
+    cv2.putText(grid, f"K=({k1},{k2})", (10,45),
+                cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2)
+
+    # ------------------ MOSTRAR ------------------
+    cv2.imshow("Grid Resultado", grid)
+
+    key = cv2.waitKey(0)
+
+    # ------------------ CONTROLES ------------------
+    if key == ord('7'):
+        k1 += 1
+
+    elif key == ord('4'):
+        k1 = max(1, k1 - 1)
+
+    elif key == ord('9'):
+        k2 += 1
+
+    elif key == ord('6'):
+        k2 = max(1, k2 - 1)
+
+    elif key == ord('q'):
+        print(f"\n🔴 Kernel final: ({k1}, {k2})")
+        cv2.destroyAllWindows()
+        break
+
+    cv2.destroyAllWindows()777
