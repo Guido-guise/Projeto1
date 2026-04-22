@@ -1,51 +1,94 @@
 import cv2
-import matplotlib.pyplot as plt
-import pandas as pd
 import numpy as np
-import os
-from skimage.morphology import skeletonize
+
+
+def limpar_componentes_pequenos(mask, area_minima):
+    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(mask, connectivity=8)
+    mask_limpa = np.zeros_like(mask)
+
+    for label in range(1, num_labels):
+        area = stats[label, cv2.CC_STAT_AREA]
+        if area >= area_minima:
+            mask_limpa[labels == label] = 255
+
+    return mask_limpa
+
+
+def extrair_folhas(img, kernel_size=(7, 7), largura_saida=300):
+    altura, largura, _ = img.shape
+    ini = int(altura * 0.69)
+
+    rec = img[0:ini, 0:largura]
+    img_hsv = cv2.cvtColor(rec, cv2.COLOR_BGR2HSV)
+
+    lower_azul = np.array([100, 120, 150], dtype=np.uint8)
+    upper_azul = np.array([120, 255, 255], dtype=np.uint8)
+    mask_fundo = cv2.inRange(img_hsv, lower_azul, upper_azul)
+    mask_planta = cv2.bitwise_not(mask_fundo)
+
+    # Mantem so os tons das folhas para remover vaso e galho.
+    lower_folha = np.array([20, 25, 40], dtype=np.uint8)
+    upper_folha = np.array([95, 255, 255], dtype=np.uint8)
+    mask_folhas = cv2.inRange(img_hsv, lower_folha, upper_folha)
+    mask_folhas = cv2.bitwise_and(mask_folhas, mask_planta)
+
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, kernel_size)
+    mask_folhas = cv2.morphologyEx(mask_folhas, cv2.MORPH_OPEN, kernel, iterations=1)
+    mask_folhas = cv2.morphologyEx(mask_folhas, cv2.MORPH_CLOSE, kernel, iterations=1)
+    mask_folhas = limpar_componentes_pequenos(mask_folhas, area_minima=250)
+
+    pontos = cv2.findNonZero(mask_folhas)
+    if pontos is None:
+        return np.zeros((largura_saida, largura_saida, 3), dtype=np.uint8)
+
+    x, y, w, h = cv2.boundingRect(pontos)
+    margem = 20
+    x0 = max(0, x - margem)
+    y0 = max(0, y - margem)
+    x1 = min(rec.shape[1], x + w + margem)
+    y1 = min(rec.shape[0], y + h + margem)
+
+    recorte = rec[y0:y1, x0:x1]
+    mask_recorte = mask_folhas[y0:y1, x0:x1]
+    resultado = cv2.bitwise_and(recorte, recorte, mask=mask_recorte)
+
+    altura_saida = max(1, int(largura_saida * (resultado.shape[0] / resultado.shape[1])))
+    return cv2.resize(resultado, (largura_saida, altura_saida))
+
+
+def centralizar_em_canvas(img, largura=300, altura=300):
+    canvas = np.zeros((altura, largura, 3), dtype=np.uint8)
+    h, w = img.shape[:2]
+
+    y0 = max(0, (altura - h) // 2)
+    x0 = max(0, (largura - w) // 2)
+    y1 = min(altura, y0 + h)
+    x1 = min(largura, x0 + w)
+
+    canvas[y0:y1, x0:x1] = img[: y1 - y0, : x1 - x0]
+    return canvas
+
 
 img_1 = cv2.imread("Projeto1/_Eucalipto_Escolhidos1/Eucalipto1.jpg", cv2.IMREAD_COLOR)
 img_2 = cv2.imread("Projeto1/_Eucalipto_Escolhidos1/Eucalipto2.jpg", cv2.IMREAD_COLOR)
 img_3 = cv2.imread("Projeto1/_Eucalipto_Escolhidos1/Eucalipto3.jpg", cv2.IMREAD_COLOR)
 img_4 = cv2.imread("Projeto1/_Eucalipto_Escolhidos1/Eucalipto4.jpg", cv2.IMREAD_COLOR)
 img_5 = cv2.imread("Projeto1/_Eucalipto_Escolhidos1/Eucalipto5.jpg", cv2.IMREAD_COLOR)
-altura, largura, _ = img_1.shape
 
-ini = int(altura * 0.69)  # ponto onde começa o corte
+imagens = [img_1, img_2, img_3, img_4, img_5]
+imagens_processadas = []
 
-rec = img_1[0:ini, 0:largura]
-img_HSV = cv2.cvtColor(rec, cv2.COLOR_BGR2HSV)
-(y,x,w)=rec.shape
-rel=int()
-larg=600
-alt=int(larg*(x/y))
+for img in imagens:
+    folhas = extrair_folhas(img, kernel_size=(7, 7), largura_saida=300)
+    imagens_processadas.append(centralizar_em_canvas(folhas, largura=300, altura=300))
 
+while len(imagens_processadas) < 6:
+    imagens_processadas.append(np.zeros((300, 300, 3), dtype=np.uint8))
 
-lower_azul = np.array([100, 120, 150])
-upper_azul = np.array([120, 255, 255])
+linha1 = np.hstack(imagens_processadas[:3])
+linha2 = np.hstack(imagens_processadas[3:6])
+grid = np.vstack([linha1, linha2])
 
-mask_fundo = cv2.inRange(img_HSV, lower_azul, upper_azul)
-mask_planta = cv2.bitwise_not(mask_fundo)
-
-resultado = cv2.bitwise_and(rec, rec, mask=mask_planta)
-x,y,w,h = cv2.boundingRect(mask_planta)
-recorte_fim=resultado[y-50:y+h+50, x-50:x+w+50]
-mask_rec=mask_planta[y-50:y+h+50, x-50:x+w+50]
-img_gray=cv2.cvtColor(recorte_fim, cv2.COLOR_BGR2GRAY)
-
-kernel = np.ones((15,13), np.uint8)
-erode=cv2.erode(img_gray, kernel, iterations=1)
-dilate=cv2.dilate(erode, kernel, iterations=1)
-contours, _ = cv2.findContours(dilate, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-maior_contorno = max(contours, key=cv2.contourArea)
-mask_pote = np.zeros_like(mask_rec)
-
-cv2.drawContours(mask_pote, [maior_contorno], -1, 255, thickness=cv2.FILLED)
-mask_fim = cv2.bitwise_not(mask_pote)
-resultado = cv2.bitwise_and(recorte_fim, recorte_fim, mask=mask_fim)
-
-ver=cv2.resize(resultado, (larg, alt))
-cv2.imshow("Resultado", ver)
+cv2.imshow("Folhas isoladas", grid)
 cv2.waitKey(0)
 cv2.destroyAllWindows()
