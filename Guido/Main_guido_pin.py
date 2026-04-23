@@ -123,8 +123,8 @@ def recorte_visualizacao_corte(img, resultado, mask_planta):
     return mask_vis, resultado_vis
 
 
-for k in range(1, 4):
-    img0 = cv2.imread(f"Projeto1/_Pinheiro_Escolhidos1/Pinheiro{k}.jpg", cv2.IMREAD_COLOR)
+for k in range(1, 7):
+    img0 = cv2.imread(f"Projeto1/_Pinheiro_Escolhidos2/Pinheiro{k}.jpg", cv2.IMREAD_COLOR)
     if img0 is None:
         print(f"Imagem {k} nao encontrada")
         continue

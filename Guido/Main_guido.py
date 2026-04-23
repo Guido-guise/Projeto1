@@ -22,6 +22,7 @@ DIST_MAX_CLUSTER = 260
 FRACAO_CORTE_VIS = 0.69
 MARGEM_CORTE_VIS = 50
 LARGURA_VIS = 600
+FAIXA_BASE_CAULE = 5  # px acima do topo do vaso para ignorar endpoint da base do caule
 
 KERNEL_OPEN = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
 KERNEL_CLOSE = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
@@ -123,8 +124,8 @@ def recorte_visualizacao_corte(img, resultado, mask_planta):
     return mask_vis, resultado_vis
 
 
-for k in range(1, 6):
-    img0 = cv2.imread(f"Projeto1/_Eucalipto_Escolhidos1/Eucalipto{k}.jpg", cv2.IMREAD_COLOR)
+for k in range(1, 10):
+    img0 = cv2.imread(f"Projeto1/_Eucalipto_Escolhidos2/Eucalipto{k}.jpg", cv2.IMREAD_COLOR)
     if img0 is None:
         print(f"Imagem {k} nao encontrada")
         continue
@@ -155,13 +156,21 @@ for k in range(1, 6):
     skel = skeletonize(mask_planta > 0).astype(np.uint8)
     vizinhos = cv2.filter2D(skel, -1, KERNEL_VIZINHOS)
     endpoints = np.logical_and(skel == 1, vizinhos == 1)
-    n_folhas_estimado = int(np.count_nonzero(endpoints))
+
+    # Remove apenas endpoints na base do caule (regiao logo acima do topo do vaso).
+    # Isso evita contar a base do caule como se fosse folha.
+    ys_ep, xs_ep = np.where(endpoints)
+    keep = ys_ep < (topo_vaso - FAIXA_BASE_CAULE)
+    endpoints_filtrados = np.zeros_like(endpoints, dtype=bool)
+    endpoints_filtrados[ys_ep[keep], xs_ep[keep]] = True
+
+    n_folhas_estimado = int(np.count_nonzero(endpoints_filtrados))
     print(f"Numero estimado de folhas_{k}: {n_folhas_estimado}")
 
     # 4) Overlay de visualizacao
     resultado = img.copy()
     resultado[skel > 0] = (0, 255, 0)
-    endpoints_vis = cv2.dilate(endpoints.astype(np.uint8), KERNEL_ENDPOINTS_VIS, iterations=1)
+    endpoints_vis = cv2.dilate(endpoints_filtrados.astype(np.uint8), KERNEL_ENDPOINTS_VIS, iterations=1)
     resultado[endpoints_vis > 0] = (0, 0, 255)
 
     # 5) Aplica recorte estilo "corte" apenas para exibir

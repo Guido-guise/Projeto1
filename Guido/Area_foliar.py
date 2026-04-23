@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # Caminho fixo de UMA imagem. O script foi feito para rodar uma imagem por vez.
-img_1 = cv2.imread("Projeto1/_Eucalipto_Escolhidos1/Eucalipto5.jpg", cv2.IMREAD_COLOR)
+img_1 = cv2.imread("Projeto1/_Eucalipto_Escolhidos2/Eucalipto5.jpg", cv2.IMREAD_COLOR)
 
 # 2) Aplicar a logica do arquivo "corte":
 # corta a parte inferior da imagem usando 69% da altura para tirar boa parte da base.
