@@ -4,29 +4,30 @@ import pandas as pd
 import numpy as np
 import os
 
-img_1 = cv2.imread("Projeto1/_Eucalipto_Escolhidos1/Eucalipto1.jpg", cv2.IMREAD_COLOR)
-altura, largura, _ = img_1.shape
+for i in range(1, 6):
+    img_1 = cv2.imread(f"Projeto1/_Eucalipto_Escolhidos1/Eucalipto{i}.jpg", cv2.IMREAD_COLOR)
+    altura, largura, _ = img_1.shape
 
-ini = int(altura * 0.69)  # ponto onde começa o corte
+    ini = int(altura * 0.69)  # ponto onde começa o corte
 
-rec = img_1[0:ini, 0:largura]
-img_HSV = cv2.cvtColor(rec, cv2.COLOR_BGR2HSV)
-(y,x,w)=rec.shape
-rel=int()
-larg=600
-alt=int(larg*(x/y))
+    rec = img_1[0:ini, 0:largura]
+    img_HSV = cv2.cvtColor(rec, cv2.COLOR_BGR2HSV)
+    (y,x,w)=rec.shape
+    rel=int()
+    larg=600
+    alt=int(larg*(x/y))
 
 
-lower_azul = np.array([100, 120, 150])
-upper_azul = np.array([120, 255, 255])
+    lower_azul = np.array([100, 120, 150])
+    upper_azul = np.array([120, 255, 255])
 
-mask_fundo = cv2.inRange(img_HSV, lower_azul, upper_azul)
-mask_planta = cv2.bitwise_not(mask_fundo)
+    mask_fundo = cv2.inRange(img_HSV, lower_azul, upper_azul)
+    mask_planta = cv2.bitwise_not(mask_fundo)
 
-resultado = cv2.bitwise_and(rec, rec, mask=mask_planta)
-x,y,w,h = cv2.boundingRect(mask_planta)
-recorte_fim=resultado[y-50:y+h+50, x-50:x+w+50]
-ver=cv2.resize(recorte_fim, (larg, alt))
+    resultado = cv2.bitwise_and(rec, rec, mask=mask_planta)
+    x,y,w,h = cv2.boundingRect(mask_planta)
+    recorte_fim=resultado[y-50:y+h+50, x-50:x+w+50]
+    ver=cv2.resize(recorte_fim, (larg, alt))
 
-plt.imshow(cv2.cvtColor(ver, cv2.COLOR_BGR2RGB))
-plt.show()
+    plt.imshow(cv2.cvtColor(ver, cv2.COLOR_BGR2RGB))
+    plt.show()
