@@ -16,7 +16,7 @@ ALTURA_DO_CHAO = 2000
 AREA_MIN_ABS = 200
 AREA_MIN_REL = 0.15
 USAR_REGULACAO_CLUSTER = True
-DIST_MAX_CLUSTER = 260
+DIST_MAX_CLUSTER = 200
 
 # Parametros de visualizacao (logica do arquivo "corte")
 FRACAO_CORTE_VIS = 0.69
@@ -124,7 +124,7 @@ def recorte_visualizacao_corte(img, resultado, mask_planta):
 
 
 for k in range(1, 4):
-    img0 = cv2.imread(f"Projeto1\_Pinheiro_Escolhidos1\Pinheiro{k}.jpg", cv2.IMREAD_COLOR)
+    img0 = cv2.imread(f"Projeto1/_Pinheiro_Escolhidos1/Pinheiro{k}.jpg", cv2.IMREAD_COLOR)
     if img0 is None:
         print(f"Imagem {k} nao encontrada")
         continue
@@ -155,6 +155,8 @@ for k in range(1, 4):
     skel = skeletonize(mask_planta > 0).astype(np.uint8)
     vizinhos = cv2.filter2D(skel, -1, KERNEL_VIZINHOS)
     endpoints = np.logical_and(skel == 1, vizinhos == 1)
+
+    # Contagem simples somente com endpoints brutos.
     n_folhas_estimado = int(np.count_nonzero(endpoints))
     print(f"Numero estimado de folhas_{k}: {n_folhas_estimado}")
 
