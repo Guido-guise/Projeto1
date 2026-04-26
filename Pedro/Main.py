@@ -6,7 +6,8 @@ import pandas as pd
 from Funcs import (melhorar_altura, maior_blob, extrair_planta_vaso, detecta_topo_vaso, so_a_planta, achar_base_topo_caule, tracar_caule, desenhar_caule, mede_diametro_coleto, desenha_coleto, calcula_altura_vertical, extrair_caule_mask)
 
 
-RAIO_CAULE = 5 
+#RAIO_CAULE = 18 
+LARGURA_MAX_CAULE = 25 # tentar forçar um limite.
 ALTURA_PADRAO = 2000
 resultados = [] # vai virar csv
 # =========================================================
@@ -21,7 +22,7 @@ GABARITO = {
 
 for k in range(1,6):
     # config inicial:
-    path = fr"C:\Users\pedro\Documents\INSPER\SEM_07\VISAO\Projeto1\_Eucalipto_Escolhidos1\Eucalipto{k}.jpg"
+    path = fr"C:\Users\pedro\Documents\INSPER\SEM_07\VISAO\Projeto1\_Eucalipto_Escolhidos2\Eucalipto{k}.jpg"
 
     img0 = cv2.imread(path)
     # pega altura original:
@@ -35,24 +36,34 @@ for k in range(1,6):
     # detecta fim do vaso
     vaso, topo_vaso, cx = detecta_topo_vaso(estrutura, hsv)
     # Segmenta a planta
-    mask_planta = so_a_planta(img, topo_vaso)
-    # tira as folhas via opening morfológico
-    mask_caule = extrair_caule_mask(mask_planta, raio=RAIO_CAULE)
+    # Agora, duas abordagens uma máscara suave e outra rude:
+    mask_planta = so_a_planta(img, topo_vaso, suavizar=True)
+    mask_planta_rude = so_a_planta(img, topo_vaso, suavizar=False)
     # SKELETON
     skel = skeletonize(mask_planta > 0).astype(np.uint8) 
+    # DEBUG: salva skeleton puro
+
     # acha base e o topo0
-    base, topo = achar_base_topo_caule(skel, topo_vaso, cx)
+    base, topo = achar_base_topo_caule(skel,mask_planta, topo_vaso, cx)
     # traça o caule
-    caule, L_px = tracar_caule(skel, base, topo)
-    # altura básica:
-    altura_basica = calcula_altura_vertical(skel, topo_vaso)
+    caule, L_px = tracar_caule(skel, base, topo, topo_vaso=topo_vaso, mask_planta=mask_planta)
+    # tira as folhas:
+    mask_caule = extrair_caule_mask(mask_planta, caule, largura_max=LARGURA_MAX_CAULE)
+    # altura básica:(agora forçando a encontrar folha real mais alta)
+    altura_basica = calcula_altura_vertical(mask_planta_rude, topo_vaso)
     # Converter para a imagem reescalada originalmente:
     dy_alvo = 10 * F_escala
-    # Mede o diâmetro do coleto:
-    diametro_pixels, pontos_do_coleto = mede_diametro_coleto(mask_planta, caule, topo_vaso, dy_pedido=dy_alvo)
+    ####################################
+    # # Mede o diâmetro do coleto:
+    # diametro_pixels, pontos_do_coleto = mede_diametro_coleto(mask_caule, caule, topo_vaso, dy_pedido=dy_alvo)
+    ###################################33333
+    kernel_dilate_diam = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+    mask_caule_diam = cv2.dilate(mask_planta_rude, kernel_dilate_diam)
+    diametro_pixels, pontos_do_coleto = mede_diametro_coleto(mask_caule_diam, caule, topo_vaso, dy_pedido=dy_alvo)
+    ###################
     # conversões:
     altura_orig  = int(round(altura_basica / F_escala))
-    comp_orig    = round(L_px / F_escala, 1)
+    comp_orig    = round(L_px / F_escala)
     diametro_orig = int(round(diametro_pixels / F_escala))
 
     # comparação com gabarito
@@ -65,7 +76,7 @@ for k in range(1,6):
 
     # # Prints no terminal dos resultados encontrados:
     # print(f"Altura básica da planta_{k}: {altura_basica} px")
-    # print(f"Comprimento do caule_{k} {L_px:.1f} px")
+    #print(f"Comprimento do caule_{k} {L_px:.1f} px")
     # print(f"Diâmetro do coleto_{k}: {diametro_pixels} px")
     
 
@@ -102,8 +113,7 @@ for k in range(1,6):
     cv2.destroyAllWindows()
 
 # Pandas solicitado:
-df = pd.DataFrame(resultados, columns=[
-    'Img', 'Altura Vert.', 'Compr Total', 'Diâmetro', 'Área', 'Nro Folhas'])
+df = pd.DataFrame(resultados, columns=['Img', 'Altura Vert.', 'Compr Total', 'Diâmetro', 'Área', 'Nro Folhas'])
  
 print("\n=== Tabela final ===")
 

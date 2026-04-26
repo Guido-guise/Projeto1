@@ -94,7 +94,7 @@ def detecta_topo_vaso(vaso_tupete, img_hsv, saturacao_max = 40):
 
     return vaso, y_topo, x_centro
 
-def so_a_planta(img, topo_vaso):
+def so_a_planta(img, topo_vaso, suavizar = True):
 
     img_capada = img.copy()
     img_capada[topo_vaso:, :] = 0
@@ -104,6 +104,9 @@ def so_a_planta(img, topo_vaso):
     # tira pixel preto
     mask[hsv[:, :, 2] < 10] = 0
 
+    if not suavizar:
+        return maior_blob(mask)
+
     kernel_morph_open = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
     kernel_morph_close = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
 
@@ -112,15 +115,48 @@ def so_a_planta(img, topo_vaso):
 
     return maior_blob(mask_close)
 
-def extrair_caule_mask(mask_planta, raio=5):
+# def extrair_caule_mask(mask_planta, raio=5):
     
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2*raio+1, 2*raio+1))
+#     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2*raio+1, 2*raio+1))
 
-    caule = cv2.morphologyEx(mask_planta, cv2.MORPH_OPEN, kernel)
+#     caule = cv2.morphologyEx(mask_planta, cv2.MORPH_OPEN, kernel)
+
+#     return maior_blob(caule)
+###########################
+def extrair_caule_mask(mask_planta, caminho, largura_max=25):
+    """
+    Constrói máscara do caule percorrendo o caminho. Para cada ponto,
+    captura a largura horizontal contínua da máscara da planta naquela
+    linha, limitada a `largura_max` pixels para não vazar em folhas.
+    """
+    h, w = mask_planta.shape
+    caule = np.zeros((h, w), dtype=np.uint8)
+
+    for (y, x) in caminho:
+        y_int, x_int = int(y), int(x)
+        if not (0 <= y_int < h) or not (0 <= x_int < w):
+            continue
+        if mask_planta[y_int, x_int] == 0:
+            continue
+
+        x_esq = x_int
+        while (x_esq > 0 and mask_planta[y_int, x_esq - 1] > 0
+               and (x_int - x_esq) < largura_max):
+            x_esq -= 1
+        x_dir = x_int
+        while (x_dir < w - 1 and mask_planta[y_int, x_dir + 1] > 0
+               and (x_dir - x_int) < largura_max):
+            x_dir += 1
+
+        caule[y_int, x_esq:x_dir+1] = 255
+
+    # Closing vertical: conecta pixels onde o caminho saltou linhas
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 7))
+    caule = cv2.morphologyEx(caule, cv2.MORPH_CLOSE, kernel)
 
     return maior_blob(caule)
-
-def achar_base_topo_caule(skeleton, topo_vaso, cx):
+##########################################################
+def achar_base_topo_caule(skeleton, mask_planta, topo_vaso, cx, raio_caule_max = 20, fracao_altura = 0.8):
 
     # Encontrar o ponto mais próximo do topo do vaso
     ys, xs = np.where(skeleton > 0)
@@ -131,33 +167,91 @@ def achar_base_topo_caule(skeleton, topo_vaso, cx):
     indice_base = int(np.argmin(distancia))
     base = (int(ys[indice_base]), int(xs[indice_base]))
 
+    # x de ref:
+    x_eixo = base[1]
+
+    # altura total da planata para comparação:
+    y_topo_planta = int(ys.min())
+    # h = altura:
+    h_total = topo_vaso - y_topo_planta
+    h_alvo = fracao_altura * h_total
+    y_alvo = topo_vaso - h_alvo
+
     # copa(topo):
     kernel = np.array(([[1, 1, 1], [1, 0, 1], [1, 1, 1]]), dtype=np.uint8)
     numero_vizinhos = cv2.filter2D(skeleton, -1, kernel)
-    fins = (skeleton > 0) & (numero_vizinhos == 1)
-    ys_f, xs_f = np.where(fins)
+    dist = cv2.distanceTransform(mask_planta, cv2.DIST_L2, 5)
 
-    # topo: endpoint que minimiza "subir + ficar no centro"
-    # peso w controla quanto a centralidade importa em relação à altura
-    w = 0.5
-    custo_topo = ys_f + w * np.abs(xs_f - cx)
-    indice_topo = int(np.argmin(custo_topo))
-    topo = (int(ys_f[indice_topo]), int(xs_f[indice_topo]))
+    bifurc = (skeleton > 0) & (numero_vizinhos >= 3)
+    ys_b, xs_b = np.where(bifurc)
+
+    topo = None
+    if len(ys_b) > 0:
+        grossuras = dist[ys_b, xs_b]
+        print(f"  Antes filtro: {len(ys_b)} bifurc, ys de {ys_b.min()} a {ys_b.max()}")
+        mascara_fino = grossuras <= raio_caule_max
+        if mascara_fino.sum() > 0:
+            ys_b = ys_b[mascara_fino]
+            xs_b = xs_b[mascara_fino]
+
+        print(f"  Após filtro grossura<={raio_caule_max}: {len(ys_b)} bifurc, ys de {ys_b.min()} a {ys_b.max()}")
+        custo_topo = np.abs(ys_b - y_alvo) + 0.5 * np.abs(xs_b - x_eixo)
+        indice_topo = int(np.argmin(custo_topo))
+        topo = (int(ys_b[indice_topo]), int(xs_b[indice_topo]))
+        #debug:
+        print("bifurcação")
+        print(f"  bifurcação em y={topo[0]} (alvo={y_alvo:.0f}, h_total={h_total})")
+
+    # reavalira esse plano B?>>>
+    if topo is None:
+        fins = (skeleton > 0) & (numero_vizinhos == 1)
+        ys_f, xs_f = np.where(fins)
+        grossuras = dist[ys_f, xs_f]
+        mascara_fino = grossuras <= raio_caule_max
+        if mascara_fino.sum() > 0:
+            ys_f = ys_f[mascara_fino]
+            xs_f = xs_f[mascara_fino]
+
+        custo_topo = np.abs(ys_f - y_alvo) + 0.5 * np.abs(xs_f - x_eixo)
+        indice_topo = int(np.argmin(custo_topo))
+        topo = (int(ys_f[indice_topo]), int(xs_f[indice_topo]))
+        # debug:
+        print("fallback")
+        print(f"  fallback em y={topo[0]} (alvo={y_alvo:.0f})")
 
     return base, topo
 
-def tracar_caule(skeleton, base, topo):
+
+def tracar_caule(skeleton, base, topo, topo_vaso=None, mask_planta=None):
     # Usa skimage.graph.route_through_array, que acha automaticamente o
     # caminho de menor custo entre dois pontos em uma matriz.
 
-    # A matriz de custo tem valor 1 onde existe skeleton e 1000 onde não existe.
-    # Assim o algoritmo vai preferir sempre andar pelo skeleton, porque sair
-    # dele custa muito '"caro"
-
-    custo = np.where(skeleton > 0, 1.0, 1000.0).astype(np.float32)
+    if mask_planta is not None:
+        dist = cv2.distanceTransform(mask_planta, cv2.DIST_L2, 5)
+        # Pixel do skeleton em região fina (caule): custo baixo
+        # Pixel do skeleton em região grossa (folha): custo alto (~dist²)
+        custo_skel = 1.0 + (dist.astype(np.float32) ** 2)
+        custo = np.where(skeleton > 0, custo_skel, 1e6).astype(np.float32)
+    else:
+        # A matriz de custo tem valor 1 onde existe skeleton e 1000 onde não existe.
+        # Assim o algoritmo vai preferir sempre andar pelo skeleton, porque sair
+        # dele custa muito '"caro"
+        custo = np.where(skeleton > 0, 1.0, 1000.0).astype(np.float32)
 
     # para funcionar o skeleton na diagonal o precisa do  fully connected+True 
     caminho, _ = route_through_array(custo, start = base, end = topo, fully_connected=True)
+    caminho = list(caminho)
+
+    # tentaiva de adiccionar mais pixels a partir do topo do vaso até a base do skeleton:
+    if topo_vaso is not None:
+
+        y_base, x_base = base
+
+        if y_base < topo_vaso:
+
+            extensao = [(y, x_base) for y in range(topo_vaso, y_base)]
+
+            caminho = extensao + caminho
 
     # Comprimento do caule:
     comprimento = 0.0
@@ -192,64 +286,40 @@ def desenhar_caule(img, skeleton, caule, topo_vaso, base=None, topo=None):
 
         
     return img_caule
+#########################################3
 # ajustado o diametro do coleto para medir 10 linhas acima do vaso:
-def mede_diametro_coleto(mask_planta, caminho, topo_vaso, dy_pedido = 10, tolerancia = 2):
-
-    # Distance TRansform:
+def mede_diametro_coleto(mask_planta, caminho, topo_vaso, dy_pedido=10, tolerancia=2):
     dist = cv2.distanceTransform(mask_planta, cv2.DIST_L2, 5)
-
-    # Filtra os pontos do caminho que estão indo pro skeleton
-    # Diametros:
     D = []
     pontos_medidos = []
 
-    for(y, x) in caminho:
-
-        dist_y = topo_vaso - y # Se for positivo, estamos acima do topo do vaso
-
-        if abs(dist_y - dy_pedido) <= tolerancia: 
-            # Raio
+    for (y, x) in caminho:
+        dist_y = topo_vaso - y
+        if abs(dist_y - dy_pedido) <= tolerancia:
             R = dist[int(y), int(x)]
-
             diametro = 2.0 * R
             D.append(diametro)
-
             pontos_medidos.append((int(y), int(x), float(diametro)))
-    
-    # Deu Ruim, não achou pontos nessa "janela"
+
     if not D:
         ponto_mais_proximo = None
         menor = float("inf")
-
         for (y, x) in caminho:
-
             d = abs((topo_vaso - y) - dy_pedido)
-
             if d < menor:
                 menor = d
-                ponto_mais_proximo = (y,x)
+                ponto_mais_proximo = (y, x)
         if ponto_mais_proximo is not None:
             y, x = ponto_mais_proximo
-
             R = dist[int(y), int(x)]
-
             diametro = 2.0 * R
-
             D.append(diametro)
-
             pontos_medidos.append((int(y), int(x), float(diametro)))
 
-    # mediana dos diametros (tentar evitar ruídos):
-
-    mediana_D = np.median(D)
-
-    diametro_pixels = int(round((mediana_D)))
-
-    #print(f"diâmetro{diametro_pixels}")
-
-    return diametro_pixels, pontos_medidos
-
-
+    if not D:
+        return 0, []
+    return int(round(np.median(D))), pontos_medidos
+#################################################################3
 def desenha_coleto(resultado, pontos_medidos):
 
 
@@ -268,9 +338,9 @@ def desenha_coleto(resultado, pontos_medidos):
     return resultado
 
 # função que pega a altura básica da planta
-def calcula_altura_vertical(skeleton, topo_vaso):
+def calcula_altura_vertical(mask_ou_skeleton, topo_vaso):
 
-    ys, _ = np.where(skeleton > 0)
+    ys, _ = np.where(mask_ou_skeleton > 0)
 
     if len(ys) == 0:
 
