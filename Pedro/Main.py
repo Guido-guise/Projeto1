@@ -1,47 +1,110 @@
 import cv2
 import numpy as np
 from skimage.morphology import skeletonize
+import pandas as pd
 
-from Funcs import (melhorar_altura, maior_blob, extrair_planta_vaso, detecta_topo_vaso, so_a_planta, achar_base_topo_caule, tracar_caule, desenhar_caule)
+from Funcs import (melhorar_altura, maior_blob, extrair_planta_vaso, detecta_topo_vaso, so_a_planta, achar_base_topo_caule, tracar_caule, desenhar_caule, mede_diametro_coleto, desenha_coleto, calcula_altura_vertical, extrair_caule_mask)
+
+
+RAIO_CAULE = 5 
+ALTURA_PADRAO = 2000
+resultados = [] # vai virar csv
+# =========================================================
+
+GABARITO = {
+    1: dict(altura=772,  comp=697,  diam=12),
+    2: dict(altura=1179, comp=961,  diam=19),
+    3: dict(altura=1107, comp=1340, diam=21),
+    4: dict(altura=794,  comp=630,  diam=14),
+    5: dict(altura=269,  comp=75,   diam=16),
+}
 
 for k in range(1,6):
     # config inicial:
     path = fr"C:\Users\pedro\Documents\INSPER\SEM_07\VISAO\Projeto1\_Eucalipto_Escolhidos1\Eucalipto{k}.jpg"
 
     img0 = cv2.imread(path)
+    # pega altura original:
+    H_original = img0.shape[0]
     # carrega + ajusta tamanho da imagem
     img = melhorar_altura(img0, altura_do_chao = 2000)
+    # Fator de correção da escala:
+    F_escala = ALTURA_PADRAO / H_original
     # acha planata + vaso
     estrutura, hsv = extrair_planta_vaso(img)
     # detecta fim do vaso
     vaso, topo_vaso, cx = detecta_topo_vaso(estrutura, hsv)
     # Segmenta a planta
     mask_planta = so_a_planta(img, topo_vaso)
+    # tira as folhas via opening morfológico
+    mask_caule = extrair_caule_mask(mask_planta, raio=RAIO_CAULE)
     # SKELETON
     skel = skeletonize(mask_planta > 0).astype(np.uint8) 
-    # acha base e o topo
-    base, topo = achar_base_topo_caule(skel, topo_vaso, cx, hsv)
-
-    # desenha o caule
+    # acha base e o topo0
+    base, topo = achar_base_topo_caule(skel, topo_vaso, cx)
+    # traça o caule
     caule, L_px = tracar_caule(skel, base, topo)
+    # altura básica:
+    altura_basica = calcula_altura_vertical(skel, topo_vaso)
+    # Converter para a imagem reescalada originalmente:
+    dy_alvo = 10 * F_escala
+    # Mede o diâmetro do coleto:
+    diametro_pixels, pontos_do_coleto = mede_diametro_coleto(mask_planta, caule, topo_vaso, dy_pedido=dy_alvo)
+    # conversões:
+    altura_orig  = int(round(altura_basica / F_escala))
+    comp_orig    = round(L_px / F_escala, 1)
+    diametro_orig = int(round(diametro_pixels / F_escala))
 
-    print(f"Comprimento do caule_{k} em pixels {L_px:.1f} px")
+    # comparação com gabarito
+    ref = GABARITO[k]
+    erro_A = abs(altura_orig    - ref['altura']) / ref['altura'] * 100
+    erro_C = abs(comp_orig      - ref['comp'])   / ref['comp']   * 100
+    erro_D = abs(diametro_orig  - ref['diam'])   / ref['diam']   * 100
+
+    resultados.append({'Img': k,'Altura Vert.': altura_orig,'Compr Total': comp_orig,'Diâmetro': diametro_orig,'Área': '','Nro Folhas': '',})
+
+    # # Prints no terminal dos resultados encontrados:
+    # print(f"Altura básica da planta_{k}: {altura_basica} px")
+    # print(f"Comprimento do caule_{k} {L_px:.1f} px")
+    # print(f"Diâmetro do coleto_{k}: {diametro_pixels} px")
+    
 
     # visualização:
-    resultado = desenhar_caule(img, skel, caule, topo_vaso)
+    resultado = desenhar_caule(img, skel, caule, topo_vaso, base=base, topo=topo)
+    # Força a "sobreposição das imagens":
+    resultado = desenha_coleto(resultado, pontos_do_coleto)
 
     # redimensiona pra caber na tela:
     altura_tela = 800
+    # altura_resultado = 1200
     escala_vis = altura_tela / resultado.shape[0]
-    resultado_vis = cv2.resize(resultado, (int(resultado.shape[1] * escala_vis), altura_tela))
+    nova_L = int(resultado.shape[1] * escala_vis)
+    # escala_resultado = altura_resultado / resultado.shape[0]
+    # resultado_vis = cv2.resize(resultado, (int(resultado.shape[1] * escala_resultado), altura_tela))
     mask_vis = cv2.resize(mask_planta, (int(mask_planta.shape[1] * escala_vis), altura_tela))
+    mask_caule_vis  = cv2.resize(mask_caule,  (nova_L, altura_tela))
 
+    # namedWindows força o tamanho correto do imshow:
     cv2.namedWindow("Mascara planta", cv2.WINDOW_NORMAL)
     cv2.resizeWindow("Mascara planta", mask_vis.shape[1], mask_vis.shape[0])
     cv2.imshow("Mascara planta", mask_vis)
 
-    cv2.namedWindow("resultado", cv2.WINDOW_NORMAL)
-    cv2.resizeWindow("resultado", resultado_vis.shape[1], resultado_vis.shape[0])
-    cv2.imshow("resultado", resultado_vis)
+    # Janela 2: máscara só do caule (depois do opening) — DEBUG principal
+    cv2.namedWindow("2 - Mascara so caule", cv2.WINDOW_NORMAL)
+    cv2.resizeWindow("2 - Mascara so caule", nova_L, altura_tela)
+    cv2.imshow("2 - Mascara so caule", mask_caule_vis)
+
+    # cv2.namedWindow("resultado", cv2.WINDOW_NORMAL)
+    # cv2.resizeWindow("resultado", resultado_vis.shape[1], resultado_vis.shape[0])
+    cv2.imshow("resultado", resultado)
+
     cv2.waitKey(0)
     cv2.destroyAllWindows()
+
+# Pandas solicitado:
+df = pd.DataFrame(resultados, columns=[
+    'Img', 'Altura Vert.', 'Compr Total', 'Diâmetro', 'Área', 'Nro Folhas'])
+ 
+print("\n=== Tabela final ===")
+
+print(df.to_string(index=False))

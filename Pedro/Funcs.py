@@ -112,7 +112,15 @@ def so_a_planta(img, topo_vaso):
 
     return maior_blob(mask_close)
 
-def achar_base_topo_caule(skeleton, topo_vaso, cx, img_hsv):
+def extrair_caule_mask(mask_planta, raio=5):
+    
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2*raio+1, 2*raio+1))
+
+    caule = cv2.morphologyEx(mask_planta, cv2.MORPH_OPEN, kernel)
+
+    return maior_blob(caule)
+
+def achar_base_topo_caule(skeleton, topo_vaso, cx):
 
     # Encontrar o ponto mais próximo do topo do vaso
     ys, xs = np.where(skeleton > 0)
@@ -128,44 +136,13 @@ def achar_base_topo_caule(skeleton, topo_vaso, cx, img_hsv):
     numero_vizinhos = cv2.filter2D(skeleton, -1, kernel)
     fins = (skeleton > 0) & (numero_vizinhos == 1)
     ys_f, xs_f = np.where(fins)
-    ##
-    # indice_topo = int(np.argmin(ys))
-    # topo = (int(ys[indice_topo]), int(xs[indice_topo]))
 
-    # 2) mascara de pixels avermelhados
-    H = img_hsv[:,:,0]
-    S = img_hsv[:,:,1]
-    mask_vermelho = (((H < 15) | (H > 165)) & (S > 40)).astype(np.uint8)
-
-    # conta quantos pixels vermelhos tem em um quadrado 31x31 ao redor de cada pixel
-    kernel_contagem = np.ones((31, 31), np.uint8)
-    contagem_vermelho = cv2.filter2D(mask_vermelho, cv2.CV_32S, kernel_contagem)
-
-    # 3) escolhe topo: endpoint na metade superior com vermelho ao redor,
-    #    ou fallback para o endpoint mais alto
-    meio_y = (ys.min() + ys.max()) / 2
-    e_alto = ys_f < meio_y
-    e_vermelho = contagem_vermelho[ys_f, xs_f] > 10
-    candidatos = e_alto & e_vermelho
-
-    if candidatos.any():
-        ys_cand = np.where(candidatos, ys_f, np.inf)
-        indice_topo = int(np.argmin(ys_cand))
-        topo = (int(ys_f[indice_topo]), int(xs_f[indice_topo]))
-        return base, topo
-
-    # 4) FALLBACK: bifurcacao mais alta do skeleton (planta jovem sem broto)
-    # bifurcacao = pixel com 3 ou mais vizinhos
-    bifurcacoes = (skeleton > 0) & (numero_vizinhos >= 3)
-    ys_b, xs_b = np.where(bifurcacoes)
-
-    if len(ys_b) > 0:
-        indice_topo = int(np.argmin(ys_b))
-        topo = (int(ys_b[indice_topo]), int(xs_b[indice_topo]))
-    else:
-        # ultimo recurso: endpoint mais alto do skeleton
-        indice_topo = int(np.argmin(ys_f))
-        topo = (int(ys_f[indice_topo]), int(xs_f[indice_topo]))
+    # topo: endpoint que minimiza "subir + ficar no centro"
+    # peso w controla quanto a centralidade importa em relação à altura
+    w = 0.5
+    custo_topo = ys_f + w * np.abs(xs_f - cx)
+    indice_topo = int(np.argmin(custo_topo))
+    topo = (int(ys_f[indice_topo]), int(xs_f[indice_topo]))
 
     return base, topo
 
@@ -191,9 +168,10 @@ def tracar_caule(skeleton, base, topo):
 
     return caminho, comprimento
 
-def desenhar_caule(img, skeleton, caule, topo_vaso):
+def desenhar_caule(img, skeleton, caule, topo_vaso, base=None, topo=None):
 
     img_caule = img.copy()
+    #  kernel = np.array(([[1, 1, 1], [1, 1, 1], [1, 1, 1]]), dtype=np.uint8)
     kernel = np.ones((3,3),np.uint8)
     skeleton_grosso = cv2.dilate(skeleton, kernel)
     img_caule[skeleton_grosso > 0] = (200, 200, 0) # skeleton ciano
@@ -201,7 +179,105 @@ def desenhar_caule(img, skeleton, caule, topo_vaso):
     for (y, x) in caule:
         cv2.circle(img_caule, (x, y), radius=1, color=(0, 0, 255), thickness=-1) # caule vermelho
 
-    cv2.line(img_caule, (0, topo_vaso), (img_caule.shape[1], topo_vaso), color=(255, 200, 100), thickness=2) # linha alaranjada
+    cv2.line(img_caule, (0, topo_vaso), (img_caule.shape[1], topo_vaso), color=(0, 165, 255), thickness=2) # linha alaranjada
     
+    # debug:
+    # marca base e topo do caule
+    if base is not None:
+        yb, xb = base
+        cv2.circle(img_caule, (xb, yb), radius=12, color=(0, 255, 0), thickness=3)   # verde
+    if topo is not None:
+        yt, xt = topo
+        cv2.circle(img_caule, (xt, yt), radius=12, color=(255, 0, 255), thickness=3) # magenta
+
         
     return img_caule
+# ajustado o diametro do coleto para medir 10 linhas acima do vaso:
+def mede_diametro_coleto(mask_planta, caminho, topo_vaso, dy_pedido = 10, tolerancia = 2):
+
+    # Distance TRansform:
+    dist = cv2.distanceTransform(mask_planta, cv2.DIST_L2, 5)
+
+    # Filtra os pontos do caminho que estão indo pro skeleton
+    # Diametros:
+    D = []
+    pontos_medidos = []
+
+    for(y, x) in caminho:
+
+        dist_y = topo_vaso - y # Se for positivo, estamos acima do topo do vaso
+
+        if abs(dist_y - dy_pedido) <= tolerancia: 
+            # Raio
+            R = dist[int(y), int(x)]
+
+            diametro = 2.0 * R
+            D.append(diametro)
+
+            pontos_medidos.append((int(y), int(x), float(diametro)))
+    
+    # Deu Ruim, não achou pontos nessa "janela"
+    if not D:
+        ponto_mais_proximo = None
+        menor = float("inf")
+
+        for (y, x) in caminho:
+
+            d = abs((topo_vaso - y) - dy_pedido)
+
+            if d < menor:
+                menor = d
+                ponto_mais_proximo = (y,x)
+        if ponto_mais_proximo is not None:
+            y, x = ponto_mais_proximo
+
+            R = dist[int(y), int(x)]
+
+            diametro = 2.0 * R
+
+            D.append(diametro)
+
+            pontos_medidos.append((int(y), int(x), float(diametro)))
+
+    # mediana dos diametros (tentar evitar ruídos):
+
+    mediana_D = np.median(D)
+
+    diametro_pixels = int(round((mediana_D)))
+
+    #print(f"diâmetro{diametro_pixels}")
+
+    return diametro_pixels, pontos_medidos
+
+
+def desenha_coleto(resultado, pontos_medidos):
+
+
+    if not pontos_medidos:
+        return resultado
+    # usa o ponto do meio da região
+
+    meio = pontos_medidos[len(pontos_medidos) // 2]
+
+    y, x, d = meio
+
+    raio = int(round(d / 2))
+
+    cv2.line(img=resultado, pt1=(x - raio, y), pt2=(x + raio, y), color=(0, 255, 255), thickness=4)
+
+    return resultado
+
+# função que pega a altura básica da planta
+def calcula_altura_vertical(skeleton, topo_vaso):
+
+    ys, _ = np.where(skeleton > 0)
+
+    if len(ys) == 0:
+
+        return 0 
+
+    altura_basica = int(topo_vaso - ys.min())
+
+    return altura_basica
+
+
