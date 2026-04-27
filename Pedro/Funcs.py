@@ -156,6 +156,156 @@ def extrair_caule_mask(mask_planta, caminho, largura_max=25):
 
     return maior_blob(caule)
 ##########################################################
+def subir_no_skeleton(ponto_inicial, skeleton, mask_planta, visitados=None, raio_max=15, passos_max=300, y_limite = None, y_topo_planta = None):
+    """
+    Sobe no skeleton a partir de um ponto enquanto:
+    - houver apenas 1 caminho possível (sem bifurcação)
+    - região for fina (caule)
+    - não revisitar pixels
+
+    Pode ser usada tanto para refinar topo quanto para estender caminho.
+    """
+    h, w = skeleton.shape
+    dist = cv2.distanceTransform(mask_planta, cv2.DIST_L2, 5)
+
+    kernel = np.array([[1,1,1],[1,0,1],[1,1,1]], dtype=np.uint8)
+    n_viz = cv2.filter2D(skeleton, -1, kernel)
+
+    if visitados is None:
+        visitados = set()
+
+    y, x = int(ponto_inicial[0]), int(ponto_inicial[1])
+    caminho = []
+
+    visitados.add((y, x))
+
+    direcao_anterior = None
+
+    for _ in range(passos_max):
+        candidatos = []
+
+        for dy in (-1, 0, 1):
+            for dx in (-1, 0, 1):
+                if dy == 0 and dx == 0:
+                    continue
+
+                ny, nx = y + dy, x + dx
+
+                if (0 <= ny < h and 0 <= nx < w
+                    and skeleton[ny, nx] > 0
+                    and (ny, nx) not in visitados
+                    and ny < y):
+                    candidatos.append((ny, nx))
+
+        if not candidatos:
+            print(f"    [subir] parou em y={y}: sem candidatos")
+            break
+
+        if len(candidatos) > 1 and direcao_anterior is not None:
+            melhor = None
+            melhor_score = -1
+
+            for ny, nx in candidatos:
+                dy = ny - y
+                dx = nx - x
+
+                norm = np.hypot(dy, dx)
+                if norm == 0:
+                    continue
+
+                dy /= norm
+                dx /= norm
+
+                # produto escalar → alinhamento
+                score = dy * direcao_anterior[0] + dx * direcao_anterior[1]
+
+                if score > melhor_score:
+                    melhor_score = score
+                    melhor = (ny, nx)
+
+            if melhor is None:
+                break
+
+            ny, nx = melhor
+        else:
+            ny, nx = candidatos[0]
+        # limite global:
+        if y_limite is not None and ny < y_limite:
+            print(f"    [subir] parou em y={y}: y_limite={y_limite}")
+            break
+        
+        # não passa topo
+        if y_topo_planta is not None and ny < y_topo_planta + 3:
+            print(f"    [subir] parou em y={y}: perto do topo da planta")
+            break
+
+        # entrou em folha
+        if dist[ny, nx] > raio_max:
+            print(f"    [subir] parou em y={y}: dist={dist[ny,nx]:.1f} > raio_max={raio_max}")
+            break
+        
+
+        # atualiza direção
+        dy = ny - y
+        dx = nx - x
+        norm = np.hypot(dy, dx)
+
+        if norm > 0:
+            direcao_anterior = (dy / norm, dx / norm)
+
+
+        caminho.append((ny, nx))
+        visitados.add((ny, nx))
+
+        y, x = ny, nx
+
+        # chegou em bifurcação → pode parar
+        #if n_viz[ny, nx] >= 3:
+            #print(f"    [subir] parou em y={y}: bifurcação")
+                    # bifurcação: só para se nenhum ramo continuar fino e alinhado
+        if n_viz[ny, nx] >= 3:
+            # olha os vizinhos do pixel atual (excluindo o de onde veio)
+            ramos_viaveis = []
+            for ddy in (-1, 0, 1):
+                for ddx in (-1, 0, 1):
+                    if ddy == 0 and ddx == 0:
+                        continue
+                    ry, rx = ny + ddy, nx + ddx
+                    if not (0 <= ry < h and 0 <= rx < w):
+                        continue
+                    if skeleton[ry, rx] == 0 or (ry, rx) in visitados:
+                        continue
+                    if ry >= ny:  # só pra cima
+                        continue
+                    if dist[ry, rx] > raio_max:
+                        continue
+                    ramos_viaveis.append((ry, rx))
+
+            if not ramos_viaveis:
+                break  # nenhum ramo viável, para mesmo
+
+            # se há candidatos, escolhe o mais alinhado com a direção atual
+            if direcao_anterior is not None and len(ramos_viaveis) > 1:
+                melhor_ramo = None
+                melhor_score = -2
+                for ry, rx in ramos_viaveis:
+                    rdy = ry - ny
+                    rdx = rx - nx
+                    rnorm = np.hypot(rdy, rdx)
+                    if rnorm == 0:
+                        continue
+                    score = (rdy / rnorm) * direcao_anterior[0] + (rdx / rnorm) * direcao_anterior[1]
+                    if score > melhor_score:
+                        melhor_score = score
+                        melhor_ramo = (ry, rx)
+                # exige alinhamento mínimo (>0 = pelo menos não está indo pro lado oposto)
+                if melhor_ramo is None or melhor_score < 0.3:
+                    break
+            #break
+
+    return caminho, (y, x)
+
+
 def achar_base_topo_caule(skeleton, mask_planta, topo_vaso, cx, raio_caule_max = 20, fracao_altura = 0.8):
 
     # Encontrar o ponto mais próximo do topo do vaso
@@ -177,6 +327,8 @@ def achar_base_topo_caule(skeleton, mask_planta, topo_vaso, cx, raio_caule_max =
     h_alvo = fracao_altura * h_total
     y_alvo = topo_vaso - h_alvo
 
+    y_limite = y_alvo - 0.1 * h_total
+
     # copa(topo):
     kernel = np.array(([[1, 1, 1], [1, 0, 1], [1, 1, 1]]), dtype=np.uint8)
     numero_vizinhos = cv2.filter2D(skeleton, -1, kernel)
@@ -188,40 +340,108 @@ def achar_base_topo_caule(skeleton, mask_planta, topo_vaso, cx, raio_caule_max =
     topo = None
     if len(ys_b) > 0:
         grossuras = dist[ys_b, xs_b]
-        print(f"  Antes filtro: {len(ys_b)} bifurc, ys de {ys_b.min()} a {ys_b.max()}")
+        #print(f"  Antes filtro: {len(ys_b)} bifurc, ys de {ys_b.min()} a {ys_b.max()}")
         mascara_fino = grossuras <= raio_caule_max
         if mascara_fino.sum() > 0:
             ys_b = ys_b[mascara_fino]
             xs_b = xs_b[mascara_fino]
 
-        print(f"  Após filtro grossura<={raio_caule_max}: {len(ys_b)} bifurc, ys de {ys_b.min()} a {ys_b.max()}")
-        custo_topo = np.abs(ys_b - y_alvo) + 0.5 * np.abs(xs_b - x_eixo)
+        #print(f"  Após filtro grossura<={raio_caule_max}: {len(ys_b)} bifurc, ys de {ys_b.min()} a {ys_b.max()}")
+        #custo = posição + penalidade de grossura
+        custo_topo = (np.abs(ys_b - y_alvo) + 0.5 * np.abs(xs_b - x_eixo) + 2.0 * dist[ys_b, xs_b]) 
         indice_topo = int(np.argmin(custo_topo))
         topo = (int(ys_b[indice_topo]), int(xs_b[indice_topo]))
+
+        _, topo = subir_no_skeleton(topo, skeleton, mask_planta, raio_max=raio_caule_max, y_limite=y_limite, y_topo_planta=y_topo_planta)
         #debug:
-        print("bifurcação")
-        print(f"  bifurcação em y={topo[0]} (alvo={y_alvo:.0f}, h_total={h_total})")
+        #print("bifurcação")
+        #print(f"  bifurcação em y={top[0]} (alvo={y_alvo:.0f}, h_total={h_total})")
 
     # reavalira esse plano B?>>>
     if topo is None:
         fins = (skeleton > 0) & (numero_vizinhos == 1)
         ys_f, xs_f = np.where(fins)
+
         grossuras = dist[ys_f, xs_f]
         mascara_fino = grossuras <= raio_caule_max
+
         if mascara_fino.sum() > 0:
+
             ys_f = ys_f[mascara_fino]
             xs_f = xs_f[mascara_fino]
 
-        custo_topo = np.abs(ys_f - y_alvo) + 0.5 * np.abs(xs_f - x_eixo)
+        custo_topo = (np.abs(ys_f - y_alvo) + 0.5 * np.abs(xs_f - x_eixo) + 2.0 * dist[ys_f, xs_f])
         indice_topo = int(np.argmin(custo_topo))
+
         topo = (int(ys_f[indice_topo]), int(xs_f[indice_topo]))
+
+        _, topo = subir_no_skeleton(topo, skeleton, mask_planta, raio_max=raio_caule_max, y_limite=y_limite, y_topo_planta=y_topo_planta)
         # debug:
-        print("fallback")
-        print(f"  fallback em y={topo[0]} (alvo={y_alvo:.0f})")
+        #print("fallback")
+        #print(f"  fallback em y={topo[0]} (alvo={y_alvo:.0f})")
 
     return base, topo
+######################################
+# def estender_caule_para_cima(caminho, skeleton, mask_planta, raio_max=15):
+#     """
+#     A partir do topo do caminho, segue o skeleton para cima enquanto for
+#     um ramo único e fino. Resolve casos onde a heurística de bifurcação
+#     parou cedo demais por filtro de grossura.
+#     """
+#     if not caminho:
+#         return caminho
 
+#     h, w = skeleton.shape
+#     dist = cv2.distanceTransform(mask_planta, cv2.DIST_L2, 5)
 
+#     # Número de vizinhos no skeleton (pra detectar bifurcações)
+#     kernel = np.array([[1,1,1],[1,0,1],[1,1,1]], dtype=np.uint8)
+#     n_viz = cv2.filter2D(skeleton, -1, kernel)
+
+#     visitados = set((int(py), int(px)) for py, px in caminho)
+#     extensao = []
+#     y, x = int(caminho[-1][0]), int(caminho[-1][1])
+
+#     PASSOS_MAX = 300
+#     for _ in range(PASSOS_MAX):
+#         # vizinhos no skeleton, ainda não visitados
+#         candidatos_cima = []
+#         for dy in (-1, 0, 1):
+#             for dx in (-1, 0, 1):
+#                 if dy == 0 and dx == 0:
+#                     continue
+#                 ny, nx = y + dy, x + dx
+#                 if (0 <= ny < h and 0 <= nx < w
+#                         and skeleton[ny, nx] > 0
+#                         and (ny, nx) not in visitados
+#                         and ny < y):  # só sobe
+#                     candidatos_cima.append((ny, nx))
+
+#         if not candidatos_cima:
+#             break  # sem para onde subir
+
+#         if len(candidatos_cima) > 1:
+#             break  # bifurcação detectada — para aqui
+
+#         ny, nx = candidatos_cima[0]
+
+#         # ponto fica grosso (entrou em folha) — para
+#         if dist[ny, nx] > raio_max:
+#             break
+
+#         extensao.append((ny, nx))
+#         visitados.add((ny, nx))
+#         y, x = ny, nx
+
+#         # se chegou num pixel que é bifurcação no skeleton, inclui e para
+#         if n_viz[ny, nx] >= 3:
+#             break
+
+#     if extensao:
+#         print(f"  extensão do caule: +{len(extensao)} pixels (de y={caminho[-1][0]} até y={extensao[-1][0]})")
+
+#     return caminho + extensao
+########################################
 def tracar_caule(skeleton, base, topo, topo_vaso=None, mask_planta=None):
     # Usa skimage.graph.route_through_array, que acha automaticamente o
     # caminho de menor custo entre dois pontos em uma matriz.
@@ -230,7 +450,11 @@ def tracar_caule(skeleton, base, topo, topo_vaso=None, mask_planta=None):
         dist = cv2.distanceTransform(mask_planta, cv2.DIST_L2, 5)
         # Pixel do skeleton em região fina (caule): custo baixo
         # Pixel do skeleton em região grossa (folha): custo alto (~dist²)
-        custo_skel = 1.0 + (dist.astype(np.float32) ** 2)
+        #custo_skel = 1.0 + (dist.astype(np.float32) ** 2)
+        xs = np.arange(skeleton.shape[1])[None, :]
+        penalidade_x = np.abs(xs - base[1])
+        custo_skel = 1.0 + (dist.astype(np.float32) ** 2) + 2.0 * penalidade_x
+
         custo = np.where(skeleton > 0, custo_skel, 1e6).astype(np.float32)
     else:
         # A matriz de custo tem valor 1 onde existe skeleton e 1000 onde não existe.
@@ -241,6 +465,20 @@ def tracar_caule(skeleton, base, topo, topo_vaso=None, mask_planta=None):
     # para funcionar o skeleton na diagonal o precisa do  fully connected+True 
     caminho, _ = route_through_array(custo, start = base, end = topo, fully_connected=True)
     caminho = list(caminho)
+    # Poda condicional:
+    if topo_vaso is not None and len(caminho) > 0:
+
+        ys = [y for (y, _) in caminho]
+
+        y_topo_planta = min(ys)
+        h_total = topo_vaso - y_topo_planta
+        fator  = 0.85 # 0.84 é top
+
+        y_alvo = topo_vaso - fator * h_total
+
+        idx_corte = np.argmin([abs(y - y_alvo) + 0.02 * y for y in ys])
+
+        caminho = caminho[:idx_corte + 1]
 
     # tentaiva de adiccionar mais pixels a partir do topo do vaso até a base do skeleton:
     if topo_vaso is not None:
@@ -252,6 +490,19 @@ def tracar_caule(skeleton, base, topo, topo_vaso=None, mask_planta=None):
             extensao = [(y, x_base) for y in range(topo_vaso, y_base)]
 
             caminho = extensao + caminho
+
+    # NOVO: estende o caminho seguindo o skeleton para cima enquanto for
+    # ramo único e fino (resolve Img 2 onde o filtro de grossura cortou cedo)
+    if mask_planta is not None and caminho:
+        ys, _ = np.where(skeleton > 0)
+
+        y_topo_planta = int(ys.min())
+
+        visitados = set((int(y), int(x)) for y, x in caminho)
+
+        extensao, _ = subir_no_skeleton(caminho[-1], skeleton, mask_planta, visitados=visitados, raio_max=15, y_limite=None, y_topo_planta=y_topo_planta)
+
+        caminho.extend(extensao)
 
     # Comprimento do caule:
     comprimento = 0.0

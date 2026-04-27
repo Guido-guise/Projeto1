@@ -10,6 +10,9 @@ from Funcs import (melhorar_altura, maior_blob, extrair_planta_vaso, detecta_top
 LARGURA_MAX_CAULE = 25 # tentar forçar um limite.
 ALTURA_PADRAO = 2000
 resultados = [] # vai virar csv
+mape_alturas = []
+mape_comprimentos = []
+mape_diametros = []
 # =========================================================
 
 GABARITO = {
@@ -68,9 +71,14 @@ for k in range(1,6):
 
     # comparação com gabarito
     ref = GABARITO[k]
-    erro_A = abs(altura_orig    - ref['altura']) / ref['altura'] * 100
-    erro_C = abs(comp_orig      - ref['comp'])   / ref['comp']   * 100
-    erro_D = abs(diametro_orig  - ref['diam'])   / ref['diam']   * 100
+    erro_A = np.abs(altura_orig    - ref['altura']) / ref['altura'] * 100
+    erro_C = np.abs(comp_orig      - ref['comp'])   / ref['comp']   * 100
+    erro_D = np.abs(diametro_orig  - ref['diam'])   / ref['diam']   * 100
+    print(f"MAPE'S: {erro_A}, {erro_C}, {erro_D}")
+
+    mape_alturas.append(erro_A)
+    mape_comprimentos.append(erro_C)
+    mape_diametros.append(erro_D)
 
     resultados.append({'Img': k,'Altura Vert.': altura_orig,'Compr Total': comp_orig,'Diâmetro': diametro_orig,'Área': '','Nro Folhas': '',})
 
@@ -112,9 +120,18 @@ for k in range(1,6):
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
+MAPE_altura = np.mean(mape_alturas)
+MAPE_comprimento = np.mean(mape_comprimentos)
+MAPE_diametro = np.mean(mape_diametros)
+
 # Pandas solicitado:
 df = pd.DataFrame(resultados, columns=['Img', 'Altura Vert.', 'Compr Total', 'Diâmetro', 'Área', 'Nro Folhas'])
  
 print("\n=== Tabela final ===")
 
 print(df.to_string(index=False))
+
+print("\n=== MAPE FINAL ===")
+print(f"Altura: {MAPE_altura:.2f}%")
+print(f"Comprimento: {MAPE_comprimento:.2f}%")
+print(f"Diâmetro: {MAPE_diametro:.2f}%")
