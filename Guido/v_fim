@@ -73,20 +73,21 @@ for k in range(1,11):
     diametro_orig = int(round(diametro_pixels / F_escala))
 
     ##Contagem folhas
-    if img is None:
+    if img0 is None:
         continue
-    img_contagem, mask = segmentar(img)
+    img10, mask = segmentar(img0)
     eixo_y, eixo_x = eixo_caule(mask)
     _, comps = componentes_skeleton(mask, eixo_y, eixo_x)
-    folhas = filtrar_caule_grupos(agrupar_componentes(comps), img_contagem.shape[1])
+    folhas = filtrar_caule_grupos(agrupar_componentes(comps), img10.shape[1])
     estimado = len(folhas)
-    cv2.imwrite(os.path.join(SAIDA, f"eucalipto{k}_contagem.png"), desenhar(img_contagem, folhas))
+    cv2.imwrite(os.path.join(SAIDA, f"eucalipto{k}_contagem.png"), desenhar(img10, folhas))
+    #print(f"Eucalipto {k}: Estimado = {estimado}")
 
     ##Area da folha
 
     # Corte fixo remove vaso/suporte sem mexer nas folhas calibradas.
-    altura = img.shape[0]
-    img_recortada = img[: int(altura * CORTE_ALTURA), :]
+    altura = img0.shape[0]
+    img_recortada = img0[: int(altura * CORTE_ALTURA), :]
 
     hsv = cv2.cvtColor(img_recortada, cv2.COLOR_BGR2HSV)
     mask_folhas = cv2.inRange(hsv, HSV_MIN, HSV_MAX)
@@ -119,10 +120,10 @@ for k in range(1,11):
 
     # redimensionar pra caber na tela e deixar o processammento mais rápido:
     altura_tela = 800
-    # altura_resultado = 1200
+    altura_resultado = 1200
     escala_vis = altura_tela / resultado.shape[0]
-    # escala_resultado = altura_resultado / resultado.shape[0]
-    # resultado_vis = cv2.resize(resultado, (int(resultado.shape[1] * escala_resultado), altura_tela))
+    escala_resultado = altura_resultado / resultado.shape[0]
+    resultado_vis = cv2.resize(resultado, (int(resultado.shape[1] * escala_resultado), altura_tela))
     mask_vis = cv2.resize(mask_planta, (int(mask_planta.shape[1] * escala_vis), altura_tela))
     
 
@@ -131,9 +132,9 @@ for k in range(1,11):
     cv2.resizeWindow("Mascara planta", mask_vis.shape[1], mask_vis.shape[0])
     cv2.imshow("Mascara planta", mask_vis)
 
-    # cv2.namedWindow("resultado", cv2.WINDOW_NORMAL)
-    # cv2.resizeWindow("resultado", resultado_vis.shape[1], resultado_vis.shape[0])
-    cv2.imshow("resultado", resultado)
+    cv2.namedWindow("resultado", cv2.WINDOW_NORMAL)
+    cv2.resizeWindow("resultado", resultado_vis.shape[1], resultado_vis.shape[0])
+    cv2.imshow("resultado", resultado_vis)
 
     cv2.waitKey(0)
     cv2.destroyAllWindows()
