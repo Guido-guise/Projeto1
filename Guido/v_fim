@@ -9,13 +9,13 @@ from Funcs import (melhorar_altura, extrair_planta_vaso, detecta_topo_vaso, so_a
 from Final import(limpar_componentes_pequenos, segmentar, eixo_caule, x_caule, angulo_diff, podar_skeleton, componente_info, componentes_skeleton, agrupar_componentes, filtrar_caule_grupos, desenhar)
 ## Variáveis Globais:
 ALTURA_PADRAO = 2000 #altura para reescalar as imagens 
-CAMINHO_IMAGEM = "Projeto1/_Eucalipto_Escolhidos2/Eucalipto{}.jpg"
+CAMINHO_IMAGEM = "D:/Visao/Projeto1/_Eucalipto_Escolhidos2/Eucalipto{}.jpg"
 CORTE_ALTURA = 0.64
 HSV_MIN = np.array([18, 38, 38], dtype=np.uint8)
 HSV_MAX = np.array([96, 255, 255], dtype=np.uint8)
 K8 = np.array([[1, 1, 1], [1, 0, 1], [1, 1, 1]], dtype=np.uint8)
 AREA_MINIMA = 15
-SAIDA = "Projeto1/Guido/saida_contagem"
+SAIDA = "D:/Visao/Projeto1/Guido/saida_contagem"
 resultados = [] # vai virar pandas no final
 # mape_alturas = []
 # mape_comprimentos = []
@@ -75,12 +75,12 @@ for k in range(1,11):
     ##Contagem folhas
     if img is None:
         continue
-    img, mask = segmentar(img)
+    img_contagem, mask = segmentar(img)
     eixo_y, eixo_x = eixo_caule(mask)
     _, comps = componentes_skeleton(mask, eixo_y, eixo_x)
-    folhas = filtrar_caule_grupos(agrupar_componentes(comps), img.shape[1])
+    folhas = filtrar_caule_grupos(agrupar_componentes(comps), img_contagem.shape[1])
     estimado = len(folhas)
-    cv2.imwrite(os.path.join(SAIDA, f"eucalipto{k}_contagem.png"), desenhar(img, folhas))
+    cv2.imwrite(os.path.join(SAIDA, f"eucalipto{k}_contagem.png"), desenhar(img_contagem, folhas))
 
     ##Area da folha
 
@@ -135,7 +135,7 @@ for k in range(1,11):
     # cv2.resizeWindow("resultado", resultado_vis.shape[1], resultado_vis.shape[0])
     cv2.imshow("resultado", resultado)
 
-    cv2.waitKey(0)
+    cv2.waitKey(1)
     cv2.destroyAllWindows()
 
 ## MAPE da altura, comprimento total e diâmetro:
