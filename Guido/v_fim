@@ -135,7 +135,7 @@ for k in range(1,11):
     # cv2.resizeWindow("resultado", resultado_vis.shape[1], resultado_vis.shape[0])
     cv2.imshow("resultado", resultado)
 
-    cv2.waitKey(1)
+    cv2.waitKey(0)
     cv2.destroyAllWindows()
 
 ## MAPE da altura, comprimento total e diâmetro:
