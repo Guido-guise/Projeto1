@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from skimage.morphology import skeletonize
 
 # 1) Ler imagem original.
-img_1 = cv2.imread("Projeto1/_Eucalipto_Escolhidos1/Eucalipto5.jpg", cv2.IMREAD_COLOR)
+img_1 = cv2.imread("Projeto1/_Eucalipto_Escolhidos2/Eucalipto1.jpg", cv2.IMREAD_COLOR)
 
 # 2) Aplicar a logica simples do arquivo "corte".
 # Cortamos em 69% da altura para remover boa parte do vaso/base.

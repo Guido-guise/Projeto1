@@ -1,94 +1,171 @@
-import cv2
+import os, cv2
 import numpy as np
+from skimage.morphology import skeletonize
 
+CAMINHO_IMAGEM = "Projeto1/_Eucalipto_Escolhidos2/Eucalipto{}.jpg"
+SAIDA = "Projeto1/Guido/saida_contagem"
+REFERENCIAS = [11, 12, 12, 13, 4]
 
-def limpar_componentes_pequenos(mask, area_minima):
-    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(mask, connectivity=8)
-    mask_limpa = np.zeros_like(mask)
+CORTE_ALTURA = 0.64
+HSV_MIN = np.array([18, 38, 38], dtype=np.uint8)
+HSV_MAX = np.array([96, 255, 255], dtype=np.uint8)
+K8 = np.array([[1,1,1],[1,0,1],[1,1,1]], dtype=np.uint8)
 
-    for label in range(1, num_labels):
-        area = stats[label, cv2.CC_STAT_AREA]
-        if area >= area_minima:
-            mask_limpa[labels == label] = 255
+def segmentar(img):
+    img = img[: int(img.shape[0] * CORTE_ALTURA), :]
+    hsv = cv2.cvtColor(cv2.GaussianBlur(img, (5,5), 0), cv2.COLOR_BGR2HSV)
+    mask = cv2.inRange(hsv, HSV_MIN, HSV_MAX)
 
-    return mask_limpa
+    # 🔥 refinamento importante
+    mask = cv2.medianBlur(mask, 5)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, np.ones((9,9), np.uint8))
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((3,3), np.uint8))
 
+    return img, mask
 
-def extrair_folhas(img, kernel_size=(7, 7), largura_saida=300):
-    altura, largura, _ = img.shape
-    ini = int(altura * 0.69)
+def eixo_caule(mask, n=25):
+    h, w = mask.shape
+    skel = skeletonize(mask > 0).astype(np.uint8)
+    cortes = np.linspace(0, h, n+1).astype(int)
 
-    rec = img[0:ini, 0:largura]
-    img_hsv = cv2.cvtColor(rec, cv2.COLOR_BGR2HSV)
+    xs_med = []
+    ys_med = []
 
-    lower_azul = np.array([100, 120, 150], dtype=np.uint8)
-    upper_azul = np.array([120, 255, 255], dtype=np.uint8)
-    mask_fundo = cv2.inRange(img_hsv, lower_azul, upper_azul)
-    mask_planta = cv2.bitwise_not(mask_fundo)
+    x_ant = w/2
+    for y0, y1 in zip(cortes[-2::-1], cortes[:0:-1]):
+        _, xs = np.where(skel[y0:y1] > 0)
+        if len(xs) > 4:
+            prox = xs[np.abs(xs - x_ant) < 120]
+            xs_use = prox if len(prox) > 2 else xs
+            x_ant = np.median(xs_use)
+            xs_med.append(x_ant)
+            ys_med.append((y0+y1)/2)
 
-    # Mantem so os tons das folhas para remover vaso e galho.
-    lower_folha = np.array([20, 25, 40], dtype=np.uint8)
-    upper_folha = np.array([95, 255, 255], dtype=np.uint8)
-    mask_folhas = cv2.inRange(img_hsv, lower_folha, upper_folha)
-    mask_folhas = cv2.bitwise_and(mask_folhas, mask_planta)
+    if len(xs_med) < 2:
+        return np.array([0,h]), np.array([w/2,w/2])
 
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, kernel_size)
-    mask_folhas = cv2.morphologyEx(mask_folhas, cv2.MORPH_OPEN, kernel, iterations=1)
-    mask_folhas = cv2.morphologyEx(mask_folhas, cv2.MORPH_CLOSE, kernel, iterations=1)
-    mask_folhas = limpar_componentes_pequenos(mask_folhas, area_minima=250)
+    return np.array(ys_med[::-1]), np.array(xs_med[::-1])
 
-    pontos = cv2.findNonZero(mask_folhas)
-    if pontos is None:
-        return np.zeros((largura_saida, largura_saida, 3), dtype=np.uint8)
+def x_caule(y, ey, ex):
+    return np.interp(y, ey, ex)
 
-    x, y, w, h = cv2.boundingRect(pontos)
-    margem = 20
-    x0 = max(0, x - margem)
-    y0 = max(0, y - margem)
-    x1 = min(rec.shape[1], x + w + margem)
-    y1 = min(rec.shape[0], y + h + margem)
+def ang_diff(a,b):
+    d = abs(a-b)%180
+    return min(d,180-d)
 
-    recorte = rec[y0:y1, x0:x1]
-    mask_recorte = mask_folhas[y0:y1, x0:x1]
-    resultado = cv2.bitwise_and(recorte, recorte, mask=mask_recorte)
+def comp_info(pts, ey, ex):
+    cx, cy = pts.mean(axis=0)
 
-    altura_saida = max(1, int(largura_saida * (resultado.shape[0] / resultado.shape[1])))
-    return cv2.resize(resultado, (largura_saida, altura_saida))
+    cov = np.cov((pts-[cx,cy]).T)
+    vals, vecs = np.linalg.eigh(cov)
+    vx, vy = vecs[:, np.argmax(vals)]
+    ang = (np.degrees(np.arctan2(vy,vx))+180)%180
 
+    dx = np.ptp(pts[:,0])+1
+    dy = np.ptp(pts[:,1])+1
 
-def centralizar_em_canvas(img, largura=300, altura=300):
-    canvas = np.zeros((altura, largura, 3), dtype=np.uint8)
-    h, w = img.shape[:2]
+    dist = np.mean(np.abs(pts[:,0]-x_caule(pts[:,1], ey, ex)))
 
-    y0 = max(0, (altura - h) // 2)
-    x0 = max(0, (largura - w) // 2)
-    y1 = min(altura, y0 + h)
-    x1 = min(largura, x0 + w)
+    return {"pts":pts,"cx":cx,"cy":cy,"ang":ang,"n":len(pts),
+            "dx":dx,"dy":dy,"dist":dist}
 
-    canvas[y0:y1, x0:x1] = img[: y1 - y0, : x1 - x0]
-    return canvas
+def componentes(mask, ey, ex):
+    h,w = mask.shape
+    skel = skeletonize(mask>0).astype(np.uint8)
+    grau = cv2.filter2D(skel, -1, K8)
+    seg = (skel>0) & (grau<=2)
 
+    n, labels, stats, _ = cv2.connectedComponentsWithStats(seg.astype(np.uint8), 8)
 
-img_1 = cv2.imread("Projeto1/_Eucalipto_Escolhidos1/Eucalipto1.jpg", cv2.IMREAD_COLOR)
-img_2 = cv2.imread("Projeto1/_Eucalipto_Escolhidos1/Eucalipto2.jpg", cv2.IMREAD_COLOR)
-img_3 = cv2.imread("Projeto1/_Eucalipto_Escolhidos1/Eucalipto3.jpg", cv2.IMREAD_COLOR)
-img_4 = cv2.imread("Projeto1/_Eucalipto_Escolhidos1/Eucalipto4.jpg", cv2.IMREAD_COLOR)
-img_5 = cv2.imread("Projeto1/_Eucalipto_Escolhidos1/Eucalipto5.jpg", cv2.IMREAD_COLOR)
+    comps=[]
+    for i in range(1,n):
+        if stats[i,cv2.CC_STAT_AREA] < max(6,int(0.003*h)):
+            continue
 
-imagens = [img_1, img_2, img_3, img_4, img_5]
-imagens_processadas = []
+        ys,xs = np.where(labels==i)
+        c = comp_info(np.column_stack([xs,ys]), ey, ex)
 
-for img in imagens:
-    folhas = extrair_folhas(img, kernel_size=(7, 7), largura_saida=300)
-    imagens_processadas.append(centralizar_em_canvas(folhas, largura=300, altura=300))
+        # 🔥 filtro de caule menos agressivo
+        vertical = ang_diff(c["ang"],90)<25
+        central = c["dist"] < 0.010*w
 
-while len(imagens_processadas) < 6:
-    imagens_processadas.append(np.zeros((300, 300, 3), dtype=np.uint8))
+        if not (central and vertical and c["dy"]>c["dx"]*1.2):
+            c["H"]=h; c["W"]=w
+            comps.append(c)
 
-linha1 = np.hstack(imagens_processadas[:3])
-linha2 = np.hstack(imagens_processadas[3:6])
-grid = np.vstack([linha1, linha2])
+    return skel, comps
 
-cv2.imshow("Folhas isoladas", grid)
-cv2.waitKey(0)
-cv2.destroyAllWindows()
+def mesmo(a,b):
+    h=max(a["H"],b["H"])
+
+    dist = np.hypot(a["cx"]-b["cx"], a["cy"]-b["cy"])
+    ang = ang_diff(a["ang"], b["ang"])
+
+    return dist < 0.07*h and ang < 35
+
+def agrupar(comps):
+    grupos=[]
+    for c in sorted(comps, key=lambda x:(x["cy"],x["cx"])):
+        ok=False
+        for g in grupos:
+            if any(mesmo(c,r) for r in g["itens"]):
+                g["itens"].append(c)
+                ok=True
+                break
+        if not ok:
+            grupos.append({"itens":[c]})
+    return grupos
+
+# 🔥 divisão de grupos grandes
+def dividir_grandes(grupos, largura):
+    novos=[]
+    for g in grupos:
+        pts = np.vstack([c["pts"] for c in g["itens"]])
+        x,y,w,h = cv2.boundingRect(pts.astype(np.int32))
+
+        if w > 0.18*largura:
+            try:
+                from sklearn.cluster import KMeans
+                k=2
+                labels = KMeans(n_clusters=k,n_init=5).fit_predict(pts)
+                for i in range(k):
+                    novos.append({"itens":[{"pts":pts[labels==i]}]})
+            except:
+                novos.append(g)
+        else:
+            novos.append(g)
+    return novos
+
+def desenhar(img, grupos):
+    out = img.copy()
+    for i,g in enumerate(grupos,1):
+        pts = np.vstack([c["pts"] for c in g["itens"]]).astype(np.int32)
+        x,y,w,h = cv2.boundingRect(pts)
+
+        cor = (40+(53*i)%200,200-(31*i)%150,60+(47*i)%180)
+        cv2.rectangle(out,(x,y),(x+w,y+h),cor,2)
+        cv2.putText(out,str(i),(x,y-5),0,0.6,cor,2)
+
+    cv2.putText(out,f"Folhas: {len(grupos)}",(30,50),0,1.2,(255,255,255),3)
+    return out
+
+os.makedirs(SAIDA,exist_ok=True)
+erros=[]
+
+for i,ref in enumerate(REFERENCIAS,1):
+    img = cv2.imread(CAMINHO_IMAGEM.format(i))
+    if img is None: continue
+
+    img,mask = segmentar(img)
+    ey,ex = eixo_caule(mask)
+
+    _, comps = componentes(mask, ey, ex)
+    grupos = dividir_grandes(agrupar(comps), img.shape[1])
+
+    est = len(grupos)
+    erros.append(abs((est-ref)/ref)*100)
+
+    print(f"Eucalipto{i}: folhas={est} ref={ref}")
+    cv2.imwrite(f"{SAIDA}/eucalipto{i}.png", desenhar(img, grupos))
+
+print("MAPE:", np.mean(erros))

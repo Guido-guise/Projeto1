@@ -26,7 +26,7 @@ def limpar_componentes_pequenos(mask, area_minima):
 
 erros = []
 
-for i, referencia in enumerate(REFERENCIAS, start=1):
+for i  in range (1,10):
     caminho = CAMINHO_IMAGEM.format(i)
     img = cv2.imread(caminho, cv2.IMREAD_COLOR)
 
@@ -44,14 +44,19 @@ for i, referencia in enumerate(REFERENCIAS, start=1):
     # Limpeza leve: remove apenas ruidos muito pequenos.
     mask_folhas = limpar_componentes_pequenos(mask_folhas, AREA_MINIMA)
 
-    area = int(np.count_nonzero(mask_folhas))
-    erro = abs((area - referencia) / referencia) * 100.0
-    erros.append(erro)
+    kernel_open = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 9))
+    kernel_close = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+    mascara_folhas = cv2.morphologyEx(mask_folhas, cv2.MORPH_OPEN, kernel_open)
+    mascara_folhas = cv2.morphologyEx(mask_folhas, cv2.MORPH_CLOSE, kernel_close)
+    area = int(np.count_nonzero(mascara_folhas))
 
     print(f"Eucalipto{i}:")
     print(f"Area: {area} px")
-    print(f"Referencia: {referencia} px")
-    print(f"Erro: {erro:.2f} %\n")
+    if i>0 and i<6:
+            erro = abs((area - REFERENCIAS[i-1]) / REFERENCIAS[i-1]) * 100.0
+            erros.append(erro)
+            print(f"Referencia: {REFERENCIAS[i-1]} px")
+            print(f"Erro: {erro:.2f} %\n")    
 
     plt.figure(figsize=(10, 4))
 
@@ -61,7 +66,7 @@ for i, referencia in enumerate(REFERENCIAS, start=1):
     plt.axis("off")
 
     plt.subplot(1, 2, 2)
-    plt.imshow(mask_folhas, cmap="gray")
+    plt.imshow(mascara_folhas, cmap="gray")
     plt.title("Mascara das folhas")
     plt.axis("off")
 
