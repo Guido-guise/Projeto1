@@ -176,6 +176,6 @@ for k in range(1, 7):
     cv2.namedWindow("resultado", cv2.WINDOW_NORMAL)
     cv2.resizeWindow("resultado", resultado_vis.shape[1], resultado_vis.shape[0])
     cv2.imshow("resultado", resultado_vis)
-
+    
     cv2.waitKey(0)
     cv2.destroyAllWindows()
