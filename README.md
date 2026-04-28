@@ -1,6 +1,6 @@
 # Projeto1
 Dinho
-
+--------------------------------------------------------------------------------
 Main.py — Pipeline de medição de mudas de eucalipto.
 
 Caso rode com o código sem partes comentadas e para as 5 primeiras imagens:
@@ -41,3 +41,27 @@ Para cada imagem do conjunto:
   9. Converte tudo de volta para a escala original (dividindo por F_escala).
  
 No fim imprime a tabela com os resultados
+----------------------------------------------------------------------------------
+Funcs.py — Pipeline de medição morfométrica de mudas de eucalipto.
+ 
+Pipeline geral (cada estágio é uma função abaixo):
+ 
+    1. Pré-processamento     → melhorar_altura
+    2. Segmentação por cor   → extrair_planta_vaso, so_a_planta
+    3. Detecção de vaso      → detecta_topo_vaso
+    4. Limpeza topológica    → maior_blob (utilitário interno)
+    5. Esqueletização        → skeletonize (chamada no Main)
+    6. Identificação base/topo do caule → achar_base_topo_caule
+                               + subir_no_skeleton (refinamento)
+    7. Traçado do caule      → tracar_caule
+                               (Dijkstra + poda + extensão)
+    8. Métricas finais       → calcula_altura_vertical,
+                               mede_diametro_coleto
+    9. Visualização          → desenhar_caule, desenha_coleto
+
+-----------------------------------------------------------------------------------
+ 
+Critérios de qualidade alvo requisitados (MAPE médio sobre as plantas):
+    Altura      < 2 %
+    Comprimento < 5 %
+    Diâmetro    < 20 %
