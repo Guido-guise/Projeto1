@@ -144,16 +144,5 @@ def desenhar(img, grupos):
         cv2.putText(out, str(i), (x + 3, max(18, y - 5)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, cor, 2)
     cv2.putText(out, f"Folhas: {len(grupos)}", (30, 55), cv2.FONT_HERSHEY_SIMPLEX, 1.4, (255, 255, 255), 3)
     return out
-erros = []
-for i in range(1, 11):
-    img = cv2.imread(CAMINHO_IMAGEM.format(i), cv2.IMREAD_COLOR)
-    if img is None:
-        continue
-    img, mask = segmentar(img)
-    eixo_y, eixo_x = eixo_caule(mask)
-    _, comps = componentes_skeleton(mask, eixo_y, eixo_x)
-    folhas = filtrar_caule_grupos(agrupar_componentes(comps), img.shape[1])
-    estimado = len(folhas)
-    cv2.imwrite(os.path.join(SAIDA, f"eucalipto{i}_contagem.png"), desenhar(img, folhas))
-    
+
 

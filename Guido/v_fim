@@ -9,13 +9,13 @@ from Funcs import (melhorar_altura, extrair_planta_vaso, detecta_topo_vaso, so_a
 from Final import(limpar_componentes_pequenos, segmentar, eixo_caule, x_caule, angulo_diff, podar_skeleton, componente_info, componentes_skeleton, agrupar_componentes, filtrar_caule_grupos, desenhar)
 ## Variáveis Globais:
 ALTURA_PADRAO = 2000 #altura para reescalar as imagens 
-CAMINHO_IMAGEM = "Projeto1/_Eucalipto_Escolhidos2/Eucalipto{}.jpg"
+CAMINHO_IMAGEM = "D:/Visao/Projeto1/_Eucalipto_Escolhidos2/Eucalipto{}.jpg"
 CORTE_ALTURA = 0.64
 HSV_MIN = np.array([18, 38, 38], dtype=np.uint8)
 HSV_MAX = np.array([96, 255, 255], dtype=np.uint8)
 K8 = np.array([[1, 1, 1], [1, 0, 1], [1, 1, 1]], dtype=np.uint8)
 AREA_MINIMA = 15
-SAIDA = "Projeto1/Guido/saida_contagem"
+SAIDA = "D:/Visao/Projeto1/Guido/saida_contagem"
 resultados = [] # vai virar pandas no final
 # mape_alturas = []
 # mape_comprimentos = []
@@ -73,20 +73,21 @@ for k in range(1,11):
     diametro_orig = int(round(diametro_pixels / F_escala))
 
     ##Contagem folhas
-    if img is None:
+    if img0 is None:
         continue
-    img, mask = segmentar(img)
+    img10, mask = segmentar(img0)
     eixo_y, eixo_x = eixo_caule(mask)
     _, comps = componentes_skeleton(mask, eixo_y, eixo_x)
-    folhas = filtrar_caule_grupos(agrupar_componentes(comps), img.shape[1])
+    folhas = filtrar_caule_grupos(agrupar_componentes(comps), img10.shape[1])
     estimado = len(folhas)
-    cv2.imwrite(os.path.join(SAIDA, f"eucalipto{k}_contagem.png"), desenhar(img, folhas))
+    cv2.imwrite(os.path.join(SAIDA, f"eucalipto{k}_contagem.png"), desenhar(img10, folhas))
+    #print(f"Eucalipto {k}: Estimado = {estimado}")
 
     ##Area da folha
 
     # Corte fixo remove vaso/suporte sem mexer nas folhas calibradas.
-    altura = img.shape[0]
-    img_recortada = img[: int(altura * CORTE_ALTURA), :]
+    altura = img0.shape[0]
+    img_recortada = img0[: int(altura * CORTE_ALTURA), :]
 
     hsv = cv2.cvtColor(img_recortada, cv2.COLOR_BGR2HSV)
     mask_folhas = cv2.inRange(hsv, HSV_MIN, HSV_MAX)
@@ -119,10 +120,10 @@ for k in range(1,11):
 
     # redimensionar pra caber na tela e deixar o processammento mais rápido:
     altura_tela = 800
-    # altura_resultado = 1200
+    altura_resultado = 1200
     escala_vis = altura_tela / resultado.shape[0]
-    # escala_resultado = altura_resultado / resultado.shape[0]
-    # resultado_vis = cv2.resize(resultado, (int(resultado.shape[1] * escala_resultado), altura_tela))
+    escala_resultado = altura_resultado / resultado.shape[0]
+    resultado_vis = cv2.resize(resultado, (int(resultado.shape[1] * escala_resultado), altura_tela))
     mask_vis = cv2.resize(mask_planta, (int(mask_planta.shape[1] * escala_vis), altura_tela))
     
 
@@ -131,9 +132,9 @@ for k in range(1,11):
     cv2.resizeWindow("Mascara planta", mask_vis.shape[1], mask_vis.shape[0])
     cv2.imshow("Mascara planta", mask_vis)
 
-    # cv2.namedWindow("resultado", cv2.WINDOW_NORMAL)
-    # cv2.resizeWindow("resultado", resultado_vis.shape[1], resultado_vis.shape[0])
-    cv2.imshow("resultado", resultado)
+    cv2.namedWindow("resultado", cv2.WINDOW_NORMAL)
+    cv2.resizeWindow("resultado", resultado_vis.shape[1], resultado_vis.shape[0])
+    cv2.imshow("resultado", resultado_vis)
 
     cv2.waitKey(0)
     cv2.destroyAllWindows()

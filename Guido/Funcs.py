@@ -577,8 +577,12 @@ def desenhar_caule(img, skeleton, caule, topo_vaso, base=None, topo=None):
     #  kernel = np.array(([[1, 1, 1], [1, 1, 1], [1, 1, 1]]), dtype=np.uint8)
     kernel = np.ones((3,3),np.uint8)
     skeleton_grosso = cv2.dilate(skeleton, kernel)
-    img_caule[skeleton_grosso > 0] = (200, 200, 0) # skeleton ciano
-
+    skeleton_grosso1 = cv2.resize(
+    skeleton_grosso,
+    (img_caule.shape[1], img_caule.shape[0]),
+    interpolation=cv2.INTER_NEAREST
+)
+    img_caule[skeleton_grosso1 > 0] = (200, 200, 0) # skeleton ciano
     for (y, x) in caule:
         cv2.circle(img_caule, (x, y), radius=1, color=(0, 0, 255), thickness=-1) # caule vermelho
 
@@ -586,12 +590,12 @@ def desenhar_caule(img, skeleton, caule, topo_vaso, base=None, topo=None):
     
     # debug:
     # marca base e topo do caule
-    if base is not None:
-        yb, xb = base
-        cv2.circle(img_caule, (xb, yb), radius=12, color=(0, 255, 0), thickness=3)   # verde
-    if topo is not None:
-        yt, xt = topo
-        cv2.circle(img_caule, (xt, yt), radius=12, color=(255, 0, 255), thickness=3) # magenta
+    #if base is not None:
+        #yb, xb = base
+        #cv2.circle(img_caule, (xb, yb), radius=12, color=(0, 255, 0), thickness=3)   # verde
+    #if topo is not None:
+        #yt, xt = topo
+        #cv2.circle(img_caule, (xt, yt), radius=12, color=(255, 0, 255), thickness=3) # magenta
 
         
     return img_caule
