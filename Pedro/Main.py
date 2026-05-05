@@ -4,7 +4,7 @@ from skimage.morphology import skeletonize
 import pandas as pd
 
 from Funcs import (melhorar_altura, maior_blob, extrair_planta_vaso, detecta_topo_vaso, so_a_planta, achar_base_topo_caule, tracar_caule, desenhar_caule, mede_diametro_coleto, desenha_coleto, calcula_altura_vertical, extrair_caule_mask)
-
+CAMINHO_IMAGEM = r"C:\Users\pedro\Documents\INSPER\SEM_07\VISAO\Projeto1\_Eucalipto_Escolhidos2\Eucalipto1.jpg"
 
 #RAIO_CAULE = 18 
 LARGURA_MAX_CAULE = 25 # tentar forçar um limite.
