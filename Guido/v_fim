@@ -1,6 +1,6 @@
 ## Bibliotecas:
 import os
-
+import matplotlib.pyplot as plt
 import cv2
 import numpy as np
 from skimage.morphology import skeletonize
@@ -9,7 +9,7 @@ from Funcs import (melhorar_altura, extrair_planta_vaso, detecta_topo_vaso, so_a
 from Final import(limpar_componentes_pequenos, segmentar, eixo_caule, x_caule, angulo_diff, podar_skeleton, componente_info, componentes_skeleton, agrupar_componentes, filtrar_caule_grupos, desenhar)
 ## Variáveis Globais:
 ALTURA_PADRAO = 2000 #altura para reescalar as imagens 
-CAMINHO_IMAGEM = "D:/Visao/Projeto1/_Eucalipto_Escolhidos2/Eucalipto{}.jpg"
+CAMINHO_IMAGEM = "D:/Visao/Projeto1/Conjunto_VALIDACAO/Eucalipto{}.jpg"
 CORTE_ALTURA = 0.64
 HSV_MIN = np.array([18, 38, 38], dtype=np.uint8)
 HSV_MAX = np.array([96, 255, 255], dtype=np.uint8)
@@ -128,16 +128,16 @@ for k in range(1,11):
     
 
     # namedWindows força o tamanho correto do imshow:
-    cv2.namedWindow("Mascara planta", cv2.WINDOW_NORMAL)
-    cv2.resizeWindow("Mascara planta", mask_vis.shape[1], mask_vis.shape[0])
-    cv2.imshow("Mascara planta", mask_vis)
+    #cv2.namedWindow("Mascara planta", cv2.WINDOW_NORMAL)
+    #cv2.resizeWindow("Mascara planta", mask_vis.shape[1], mask_vis.shape[0])
+    #cv2.imshow("Mascara planta", mask_vis)
 
-    cv2.namedWindow("resultado", cv2.WINDOW_NORMAL)
-    cv2.resizeWindow("resultado", resultado_vis.shape[1], resultado_vis.shape[0])
-    cv2.imshow("resultado", resultado_vis)
+    #cv2.namedWindow("resultado", cv2.WINDOW_NORMAL)
+    #cv2.resizeWindow("resultado", resultado_vis.shape[1], resultado_vis.shape[0])
+    #cv2.imshow("resultado", resultado_vis)
 
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    #cv2.waitKey(0)
+    #cv2.destroyAllWindows()
 
 ## MAPE da altura, comprimento total e diâmetro:
 # MAPE_altura = np.mean(mape_alturas)
@@ -146,7 +146,31 @@ for k in range(1,11):
 
 # Pandas solicitado:
 df = pd.DataFrame(resultados, columns=['Img', 'Altura Vert.', 'Compr Total', 'Diâmetro', 'Área', 'Nro Folhas'])
- 
+df_prev=df.copy()
+df_real = pd.read_excel("Projeto1/Conjunto_VALIDACAO/Resultados_VALIDACAO.xlsx", header=1)
+df_real = df_real.loc[:, ~df_real.columns.str.contains('^Unnamed')]
+print(df_real.columns.tolist())
+# remover colunas vazias
+df_real = df_real.dropna(axis=1, how='all')
+
+
+
+# remover coluna chave antes do MAPE
+df_real_val = df_real.drop(columns=["Img"])
+df_prev_val = df_prev.drop(columns=["Img"])
+
+df_real_val = df_real_val.apply(pd.to_numeric, errors='coerce')
+df_prev_val = df_prev_val.apply(pd.to_numeric, errors='coerce')
+
+real_safe = df_real_val.replace(0, np.nan)
+
+mape_por_coluna = (np.abs((df_real_val - df_prev_val) / real_safe)).mean() * 100
+
+print("MAPE por coluna:")
+print(mape_por_coluna)
+
+print("\nMAPE total:")
+print(mape_por_coluna.mean())
 print("\n=== Tabela final ===")
 
 print(df.to_string(index=False))

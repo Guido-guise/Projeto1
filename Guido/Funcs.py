@@ -198,7 +198,7 @@ def subir_no_skeleton(ponto_inicial, skeleton, mask_planta, visitados=None, raio
                     candidatos.append((ny, nx))
 
         if not candidatos:
-            print(f"    [subir] parou em y={y}: sem candidatos")
+            #print(f"    [subir] parou em y={y}: sem candidatos")
             break
 
         if len(candidatos) > 1 and direcao_anterior is not None:
@@ -231,17 +231,17 @@ def subir_no_skeleton(ponto_inicial, skeleton, mask_planta, visitados=None, raio
             ny, nx = candidatos[0]
         # limite global:
         if y_limite is not None and ny < y_limite:
-            print(f"    [subir] parou em y={y}: y_limite={y_limite}")
+            #print(f"    [subir] parou em y={y}: y_limite={y_limite}")
             break
         
         # não passa topo
         if y_topo_planta is not None and ny < y_topo_planta + 3:
-            print(f"    [subir] parou em y={y}: perto do topo da planta")
+            #print(f"    [subir] parou em y={y}: perto do topo da planta")
             break
 
         # entrou em folha
         if dist[ny, nx] > raio_max:
-            print(f"    [subir] parou em y={y}: dist={dist[ny,nx]:.1f} > raio_max={raio_max}")
+            #print(f"    [subir] parou em y={y}: dist={dist[ny,nx]:.1f} > raio_max={raio_max}")
             break
         
 
