@@ -78,7 +78,7 @@ def componentes_skeleton(mask, eixo_y, eixo_x):
         c = componente_info(np.column_stack([xs, ys]), eixo_y, eixo_x)
         vertical = angulo_diff(c["ang"], 90.0) < 25
         central = c["dist"] < 0.014 * w
-        caule = central and c["dx"] < 0.015 * w and c["dy"] > 1.25 * c["dx"] and (vertical or c["dy"] > 0.018 * h)
+        caule = central and c["dx"] < 0.011 * w and c["dy"] > 1.25 * c["dx"] and (vertical or c["dy"] > 0.018 * h)
         if not caule:
             c["H"], c["W"] = h, w
             comps.append(c)
@@ -89,7 +89,7 @@ def mesmo_grupo(a, b):
     ang = angulo_diff(a["ang"], b["ang"])
     vx, vy = np.cos(np.radians(a["ang"])), np.sin(np.radians(a["ang"]))
     alinh = abs((b["cx"] - a["cx"]) * vy - (b["cy"] - a["cy"]) * vx)
-    perto = dist < min(0.06 * h + 0.26 * max(a["n"], b["n"]), 0.085 * h)
+    perto = dist < min(0.06 * h + 0.26 * max(a["n"], b["n"]), 0.100 * h)
     return ang < 42 and perto and alinh < 0.022 * h and abs(a["cy"] - b["cy"]) < 0.12 * h
 def caixa_grupo(g):
     pts = np.vstack([c["pts"] for c in g["itens"]]).astype(np.int32)
@@ -112,7 +112,7 @@ def agrupar_componentes(comps):
         dup = False
         for s in saida:
             _, x2, y2, w2, h2, cx2, cy2 = caixa_grupo(s)
-            perto = np.hypot(cx - cx2, cy - cy2) < 0.035 * max(g["itens"][0]["H"], s["itens"][0]["H"])
+            perto = np.hypot(cx - cx2, cy - cy2) < 0.032 * max(g["itens"][0]["H"], s["itens"][0]["H"])
             if perto and abs(w - w2) < 0.5 * max(w, w2) and abs(h - h2) < 0.5 * max(h, h2):
                 s["itens"] += g["itens"]; dup = True; break
         if not dup:
@@ -131,7 +131,7 @@ def filtrar_caule_grupos(grupos, largura):
     for g, x, y, w, h, cx in caixas:
         dens = h / max(1, w)
         estreito = w < 0.032 * largura and dens > 1.15 and abs(cx - stem_x) < 0.025 * largura
-        fragmento = w < 0.018 * largura and h < 0.04 * largura and abs(cx - stem_x) < 0.03 * largura
+        fragmento = w < 0.038 * largura and h < 0.04 * largura and abs(cx - stem_x) < 0.03 * largura
         if not (estreito or fragmento):
             folhas.append(g)
     return folhas
