@@ -3,7 +3,7 @@ import numpy as np
 from skimage.morphology import skeletonize
 import pandas as pd
 
-from Funcs import (melhorar_altura, maior_blob, extrair_planta_vaso, detecta_topo_vaso, so_a_planta, achar_base_topo_caule, tracar_caule, desenhar_caule, mede_diametro_coleto, desenha_coleto, calcula_altura_vertical, extrair_caule_mask)
+from Funcs import (melhorar_altura, maior_blob, extrair_planta_vaso, detecta_topo_vaso, so_a_planta, achar_base_topo_caule, tracar_caule, desenhar_caule, mede_diametro_coleto, desenha_coleto, calcula_altura_vertical)
 CAMINHO_IMAGEM = r"C:\Users\pedro\Documents\INSPER\SEM_07\VISAO\Projeto1\_Eucalipto_Escolhidos2\Eucalipto1.jpg"
 
 #RAIO_CAULE = 18 
@@ -18,9 +18,17 @@ GABARITO = {
     3: dict(altura=1107, comp=1340, diam=21),
     4: dict(altura=794,  comp=630,  diam=14),
     5: dict(altura=269,  comp=75,   diam=16),
+    6: dict(altura=394,  comp=263,  diam=13),
+    7: dict(altura=1102, comp=941,  diam=16),
+    8: dict(altura=997,  comp=948,  diam=13),
+    9: dict(altura=1333, comp=1252, diam=16),
+    10: dict(altura=873, comp=610,  diam=13),
+    11: dict(altura=1039, comp=933, diam=14),
+    12: dict(altura=1547, comp=1365, diam=17),
+    13: dict(altura=273, comp=73,   diam=13),
 }
 
-for k in range(1,6):
+for k in range(1,11):
     # config inicial:
     path = fr"C:\Users\pedro\Documents\INSPER\SEM_07\VISAO\Projeto1\_Eucalipto_Escolhidos2\Eucalipto{k}.jpg"
 
@@ -47,8 +55,7 @@ for k in range(1,6):
     base, topo = achar_base_topo_caule(skel,mask_planta, topo_vaso, cx)
     # traça o caule
     caule, L_px = tracar_caule(skel, base, topo, topo_vaso=topo_vaso, mask_planta=mask_planta)
-    # tira as folhas:
-    mask_caule = extrair_caule_mask(mask_planta, caule, largura_max=LARGURA_MAX_CAULE)
+    
     # altura básica:(agora forçando a encontrar folha real mais alta)
     altura_basica = calcula_altura_vertical(mask_planta_rude, topo_vaso)
     # Converter para a imagem reescalada originalmente:
@@ -85,32 +92,27 @@ for k in range(1,6):
     # Força a "sobreposição das imagens":
     resultado = desenha_coleto(resultado, pontos_do_coleto)
 
-    # redimensiona pra caber na tela:
-    altura_tela = 800
-    # altura_resultado = 1200
-    escala_vis = altura_tela / resultado.shape[0]
-    nova_L = int(resultado.shape[1] * escala_vis)
-    # escala_resultado = altura_resultado / resultado.shape[0]
-    # resultado_vis = cv2.resize(resultado, (int(resultado.shape[1] * escala_resultado), altura_tela))
-    mask_vis = cv2.resize(mask_planta, (int(mask_planta.shape[1] * escala_vis), altura_tela))
-    mask_caule_vis  = cv2.resize(mask_caule,  (nova_L, altura_tela))
+    # # redimensiona pra caber na tela:
+    # altura_tela = 800
+    # # altura_resultado = 1200
+    # escala_vis = altura_tela / resultado.shape[0]
+    # nova_L = int(resultado.shape[1] * escala_vis)
+    # # escala_resultado = altura_resultado / resultado.shape[0]
+    # # resultado_vis = cv2.resize(resultado, (int(resultado.shape[1] * escala_resultado), altura_tela))
+    # mask_vis = cv2.resize(mask_planta, (int(mask_planta.shape[1] * escala_vis), altura_tela))
+    # #mask_caule_vis  = cv2.resize(mask_caule,  (nova_L, altura_tela))
 
-    # namedWindows força o tamanho correto do imshow:
-    cv2.namedWindow("Mascara planta", cv2.WINDOW_NORMAL)
-    cv2.resizeWindow("Mascara planta", mask_vis.shape[1], mask_vis.shape[0])
-    cv2.imshow("Mascara planta", mask_vis)
+    # # namedWindows força o tamanho correto do imshow:
+    # cv2.namedWindow("Mascara planta", cv2.WINDOW_NORMAL)
+    # cv2.resizeWindow("Mascara planta", mask_vis.shape[1], mask_vis.shape[0])
+    # cv2.imshow("Mascara planta", mask_vis)
 
-    # Janela 2: máscara só do caule (depois do opening) — DEBUG principal
-    cv2.namedWindow("2 - Mascara so caule", cv2.WINDOW_NORMAL)
-    cv2.resizeWindow("2 - Mascara so caule", nova_L, altura_tela)
-    cv2.imshow("2 - Mascara so caule", mask_caule_vis)
+    # # cv2.namedWindow("resultado", cv2.WINDOW_NORMAL)
+    # # cv2.resizeWindow("resultado", resultado_vis.shape[1], resultado_vis.shape[0])
+    # cv2.imshow("resultado", resultado)
 
-    # cv2.namedWindow("resultado", cv2.WINDOW_NORMAL)
-    # cv2.resizeWindow("resultado", resultado_vis.shape[1], resultado_vis.shape[0])
-    cv2.imshow("resultado", resultado)
-
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
 
 # Pandas solicitado:
 df = pd.DataFrame(resultados, columns=['Img', 'Altura Vert.', 'Compr Total', 'Diâmetro', 'Área', 'Nro Folhas'])
