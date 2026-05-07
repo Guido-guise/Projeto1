@@ -5,8 +5,7 @@ from skimage.graph import route_through_array
 
 #Thresholds HSV fixos:
 # (Fundo azul)
-lower_azul = np.array([100, 120, 150]) # reajustando
-
+lower_azul = np.array([100, 120, 150])
 upper_azul = np.array([120, 255, 255])
 
 ## Funções para utilizar no projeto-Main.py ##
@@ -174,9 +173,8 @@ def so_a_planta(img, topo_vaso, suavizar = True):
     mask[hsv[:, :, 2] < 10] = 0
 
     if not suavizar:
-
         return maior_blob(mask)
-    
+
     kernel_morph_open = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
     kernel_morph_close = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
 
@@ -240,7 +238,7 @@ def subir_no_skeleton(ponto_inicial, skeleton, mask_planta, visitados=None, raio
                     candidatos.append((ny, nx))
 
         if not candidatos:
-            #print(f"    [subir] parou em y={y}: sem candidatos")
+            print(f"    [subir] parou em y={y}: sem candidatos")
             break
 
         if len(candidatos) > 1 and direcao_anterior is not None:
@@ -273,17 +271,17 @@ def subir_no_skeleton(ponto_inicial, skeleton, mask_planta, visitados=None, raio
             ny, nx = candidatos[0]
         # limite global:
         if y_limite is not None and ny < y_limite:
-            #print(f"    [subir] parou em y={y}: y_limite={y_limite}")
+            print(f"    [subir] parou em y={y}: y_limite={y_limite}")
             break
         
         # não passa topo
         if y_topo_planta is not None and ny < y_topo_planta + 3:
-            #print(f"    [subir] parou em y={y}: perto do topo da planta")
+            print(f"    [subir] parou em y={y}: perto do topo da planta")
             break
 
         # entrou em folha
         if dist[ny, nx] > raio_max:
-            #print(f"    [subir] parou em y={y}: dist={dist[ny,nx]:.1f} > raio_max={raio_max}")
+            print(f"    [subir] parou em y={y}: dist={dist[ny,nx]:.1f} > raio_max={raio_max}")
             break
         
 
@@ -383,13 +381,8 @@ def achar_base_topo_caule(skeleton, mask_planta, topo_vaso, cx, raio_caule_max =
 
     # Encontrar o ponto mais próximo do topo do vaso
     ys, xs = np.where(skeleton > 0)
-    # Distância ponderada para encontrar a base do caule.
-    # Peso 0.20 em x (vs 1.0 em y) atenua o termo lateral porque mudas
-    # inclinadas/curvadas têm a base ligeiramente fora do centro do vaso —
-    # não queremos prender a base em cx se a planta brotou 30 px fora.
-    # Valores testados: 0.5 perde plantas inclinadas; 0.1 confunde com ruído
-    # lateral. 0.20 é o sweet spot após testes empíricos.
-
+    
+    # Forçar a dar menos enfase no direcionamento em x
     distancia = np.sqrt(0.20 * (xs - cx) ** 2 + (ys - topo_vaso) ** 2)
     # base:
     indice_base = int(np.argmin(distancia))
@@ -435,7 +428,7 @@ def achar_base_topo_caule(skeleton, mask_planta, topo_vaso, cx, raio_caule_max =
         #print("bifurcação")
         #print(f"  bifurcação em y={top[0]} (alvo={y_alvo:.0f}, h_total={h_total})")
 
-    
+    # reavalira esse plano B?>>>
     if topo is None:
         fins = (skeleton > 0) & (numero_vizinhos == 1)
         ys_f, xs_f = np.where(fins)
@@ -494,17 +487,6 @@ def tracar_caule(skeleton, base, topo, topo_vaso=None, mask_planta=None):
         continua fino e único acima desse ponto. `subir_no_skeleton`
         aproveita o que ainda existir de caule contínuo até esbarrar em
         folha ou bifurcação real.
-    
-    Etapa 5 — Corte de entrada em folha (análise de espessura):
-        Varre o caminho do final para o início medindo espessura local
-        (distance transform). Se há um trecho final contínuo de pixels
-        com espessura > limiar adaptativo (1.15·mediana_caule + 2.0),
-        tolerando até 3 pixels finos consecutivos no meio (folhas
-        secundárias do skeleton), trunca esse trecho. Salvaguarda:
-        nunca corta mais que 1/3 do caminho. Esta etapa é o que faz o
-        algoritmo lidar com mudas onde o caule está coberto por uma
-        folha grande no topo (a poda por fração de altura sozinha
-        seguiria pelo skeleton da folha como se fosse caule).
  
     Comprimento: soma das hipotenusas dos passos do caminho final.
     """   
@@ -519,7 +501,7 @@ def tracar_caule(skeleton, base, topo, topo_vaso=None, mask_planta=None):
         #custo_skel = 1.0 + (dist.astype(np.float32) ** 2)
         xs = np.arange(skeleton.shape[1])[None, :]
         penalidade_x = np.abs(xs - base[1])
-        custo_skel = 1.0 +   (dist.astype(np.float32) ** 2) + 2.0 * penalidade_x
+        custo_skel = 1.0 + 3.0 *  (dist.astype(np.float32) ** 2) + 2.0 * penalidade_x
 
         custo = np.where(skeleton > 0, custo_skel, 1e6).astype(np.float32)
     else:
@@ -538,7 +520,7 @@ def tracar_caule(skeleton, base, topo, topo_vaso=None, mask_planta=None):
 
         y_topo_planta = min(ys)
         h_total = topo_vaso - y_topo_planta
-        fator  = 0.85 # corte do Dijkstra em fração da altura 
+        fator  = 0.88 # 0.84 é top
 
         y_alvo = topo_vaso - fator * h_total
 
@@ -557,10 +539,8 @@ def tracar_caule(skeleton, base, topo, topo_vaso=None, mask_planta=None):
 
             caminho = extensao + caminho
 
-    # Etapa de extensão superior: a poda por fração de altura (etapa anterior)
-    # é conservadora — em plantas onde o caule continua fino e único acima do
-    # corte de 0.85·h, ela perde pixels reais de caule. subir_no_skeleton
-    # recupera esses pixels enquanto a espessura e a topologia permitirem.
+    # NOVO: estende o caminho seguindo o skeleton para cima enquanto for
+    # ramo único e fino (resolve Img 2 onde o filtro de grossura cortou cedo)
     if mask_planta is not None and caminho:
         ys, _ = np.where(skeleton > 0)
 
@@ -571,42 +551,6 @@ def tracar_caule(skeleton, base, topo, topo_vaso=None, mask_planta=None):
         extensao, _ = subir_no_skeleton(caminho[-1], skeleton, mask_planta, visitados=visitados, raio_max=13, passos_max=60, y_limite=None, y_topo_planta=y_topo_planta)
 
         caminho.extend(extensao)
-
-    usar_corte_folha = True
-    if usar_corte_folha and mask_planta is not None and len(caminho) > 10:
-        dist_full = cv2.distanceTransform(mask_planta, cv2.DIST_L2, 5)
-        grossuras = np.array([dist_full[y, x] for (y, x) in caminho], dtype=np.float32)
-        n = len(caminho)
-
-        # Pixels da extensão sintética inicial podem estar fora da máscara (dist=0).
-        # Para o limiar, usa só pixels DENTRO da planta.
-        gross_validas = grossuras[grossuras > 0]
-        if len(gross_validas) >= 10:
-            terco = max(3, len(gross_validas) // 3)
-            gross_caule = float(np.median(gross_validas[:terco]))
-            # 1.15 = ltiplicador do limiar de espessura
-            # 3.5= do limiar
-            # 
-            limiar = max(gross_caule * 1.15 + 2.0, gross_caule + 3.5)
-
-            n_grossos_finais = 0
-            finos_consec = 0
-            tolera_finos = 3 # quanros pixels finos consecutivos tolera
-            for i in range(n - 1, -1, -1):
-                if grossuras[i] > limiar:
-                    n_grossos_finais += 1
-                    finos_consec = 0
-                else:
-                    finos_consec += 1
-                    if finos_consec > tolera_finos:
-                        break
-                    n_grossos_finais += 1  # conta como parte do trecho final
-
-            # Salvaguarda: nunca corta mais de 1/3 do caminho
-            max_corte = n // 3
-            if n_grossos_finais >= 5: # gatilho para corte
-                n_cortar = min(n_grossos_finais, max_corte)
-                caminho = caminho[:n - n_cortar]
 
     # Comprimento do caule:
     comprimento = 0.0
@@ -640,14 +584,14 @@ def desenhar_caule(img, skeleton, caule, topo_vaso, base=None, topo=None):
 
     cv2.line(img_caule, (0, topo_vaso), (img_caule.shape[1], topo_vaso), color=(0, 165, 255), thickness=2) # linha alaranjada
     
-    # # debug:
-    # # marca base e topo do caule
-    # if base is not None:
-    #     yb, xb = base
-    #     cv2.circle(img_caule, (xb, yb), radius=12, color=(0, 255, 0), thickness=3)   # verde
-    # if topo is not None:
-    #     yt, xt = topo
-    #     cv2.circle(img_caule, (xt, yt), radius=12, color=(255, 0, 255), thickness=3) # magenta
+    # debug:
+    # marca base e topo do caule
+    if base is not None:
+        yb, xb = base
+        cv2.circle(img_caule, (xb, yb), radius=12, color=(0, 255, 0), thickness=3)   # verde
+    if topo is not None:
+        yt, xt = topo
+        cv2.circle(img_caule, (xt, yt), radius=12, color=(255, 0, 255), thickness=3) # magenta
 
         
     return img_caule
@@ -656,24 +600,7 @@ def desenhar_caule(img, skeleton, caule, topo_vaso, base=None, topo=None):
 def mede_diametro_coleto(mask_planta, caminho, topo_vaso, dy_pedido=10, tolerancia=2):
     """
     Mede o diâmetro do caule numa altura específica acima do topo do vaso.
-    
-    EFEITO COLATERAL: aplica cv2.dilate(3x3) sobre a máscara recebida antes
-    de calcular o distanceTransform. Isso fecha micro-gaps que zerariam o
-    diâmetro em algumas imagens, mas introduz viés sistemático de +1 a +2
-    pixels no diâmetro retornado. A magnitude do viés é constante por
-    escala — em mudas pequenas isso pode ser >10% do diâmetro real.
-
-    Inputs:
-        mask_planta_rude : máscara binária da planta (uint8, 0 ou 255).
-                           Apesar do nome, será modificada internamente.
-        caminho          : lista de (y, x) representando o eixo do caule.
-        topo_vaso        : y do topo do vaso na imagem (referência).
-        dy_pedido        : distância vertical (em px) acima do vaso onde
-                           medir. Padrão 10 — equivale a ~10 px na resolução
-                           normalizada (ALTURA_PADRAO).
-        tolerancia       : faixa em px (acima/abaixo de dy_pedido) onde
-                           coletar amostras.
-
+ 
     Usa a distance transform: para cada pixel da máscara, dist[y,x] = raio
     do maior círculo centrado em (y,x) que cabe inteiro dentro da máscara.
     Logo, 2·dist[y,x] = espessura local da estrutura naquele ponto.
@@ -689,10 +616,6 @@ def mede_diametro_coleto(mask_planta, caminho, topo_vaso, dy_pedido=10, toleranc
     Retorna a mediana dos diâmetros e a lista de pontos medidos (usada
     pela visualização).
     """    
-    #kernel_dilate_diam = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
-    #mask_caule_diam = cv2.dilate(mask_planta_rude, kernel_dilate_diam)
-
-    #dist = cv2.distanceTransform(mask_caule_diam, cv2.DIST_L2, 5)
     dist = cv2.distanceTransform(mask_planta, cv2.DIST_L2, 5)
     D = []
     pontos_medidos = []
@@ -747,17 +670,10 @@ def desenha_coleto(resultado, pontos_medidos):
     return resultado
 
 # função que pega a altura básica da planta
-def calcula_altura_vertical(mask_planta_rude, topo_vaso):
+def calcula_altura_vertical(mask_ou_skeleton, topo_vaso):
     """
     Altura básica = distância vertical entre o topo do vaso e o pixel mais
     alto da máscara da planta.
-
-    EFEITO COLATERAL: aplica cv2.dilate(3x3) sobre a máscara recebida.
-    Isso é uma CALIBRAÇÃO, não preprocessing — compensa o viés sistemático
-    do limiar HSV que perde a ponta de folhas no topo (anti-aliasing
-    contra o fundo azul). Resultado: altura medida ~1 px maior do que
-    a máscara crua daria. Sem essa compensação, MAPE altura ficava em
-    ~2.0%; com ela, em ~1.8%.
  
     Recebe `mask_planta_rude` (sem morfologia) no Main.py: morfologia
     poderia "podar" pixels do topo de uma folha alta, subestimando a altura.
@@ -765,10 +681,7 @@ def calcula_altura_vertical(mask_planta_rude, topo_vaso):
     eventual ruído — mas o `maior_blob` já garante que esse ruído não esteja
     desconectado da planta principal.
     """
-    kernel_alt = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
-    mask_alt = cv2.dilate(mask_planta_rude, kernel_alt)
-
-    ys, _ = np.where(mask_alt > 0)
+    ys, _ = np.where(mask_ou_skeleton > 0)
 
     if len(ys) == 0:
 

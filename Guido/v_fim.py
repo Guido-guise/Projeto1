@@ -5,7 +5,7 @@ import cv2
 import numpy as np
 from skimage.morphology import skeletonize
 import pandas as pd
-from Funcs import (melhorar_altura, extrair_planta_vaso, detecta_topo_vaso, so_a_planta, achar_base_topo_caule, tracar_caule, desenhar_caule, mede_diametro_coleto, desenha_coleto, calcula_altura_vertical) #, extrair_caule_mask)
+from Funcs_old import (melhorar_altura, extrair_planta_vaso, detecta_topo_vaso, so_a_planta, achar_base_topo_caule, tracar_caule, desenhar_caule, mede_diametro_coleto, desenha_coleto, calcula_altura_vertical) #, extrair_caule_mask)
 from Final import(limpar_componentes_pequenos, segmentar, eixo_caule, x_caule, angulo_diff, podar_skeleton, componente_info, componentes_skeleton, agrupar_componentes, filtrar_caule_grupos, desenhar)
 ## Variáveis Globais:
 ALTURA_PADRAO = 2000 #altura para reescalar as imagens 
@@ -81,7 +81,7 @@ for k in range(1,11):
     folhas = filtrar_caule_grupos(agrupar_componentes(comps), img10.shape[1])
     estimado = len(folhas)
     cv2.imwrite(os.path.join(SAIDA, f"eucalipto{k}_contagem.png"), desenhar(img10, folhas))
-    print(f"Eucalipto {k}: Estimado = {estimado}")
+    #print(f"Eucalipto {k}: Estimado = {estimado}")
 
     ##Area da folha
 
