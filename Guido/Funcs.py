@@ -183,7 +183,7 @@ def so_a_planta(img, topo_vaso, suavizar = True):
 
     return maior_blob(mask_close)
 ## CAMINHADA NO SKELETON
-def subir_no_skeleton(ponto_inicial, skeleton, mask_planta, visitados=None, raio_max=15, passos_max=300, y_limite = None, y_topo_planta = None):
+def subir_no_skeleton(ponto_inicial, skeleton, mask_planta, visitados=None, raio_max=11, passos_max=120, y_limite = None, y_topo_planta = None):
     """
     Caminhada gulosa subindo no skeleton a partir de um ponto.
  
@@ -238,7 +238,7 @@ def subir_no_skeleton(ponto_inicial, skeleton, mask_planta, visitados=None, raio
                     candidatos.append((ny, nx))
 
         if not candidatos:
-            #print(f"    [subir] parou em y={y}: sem candidatos")
+            print(f"    [subir] parou em y={y}: sem candidatos")
             break
 
         if len(candidatos) > 1 and direcao_anterior is not None:
@@ -271,17 +271,17 @@ def subir_no_skeleton(ponto_inicial, skeleton, mask_planta, visitados=None, raio
             ny, nx = candidatos[0]
         # limite global:
         if y_limite is not None and ny < y_limite:
-            #print(f"    [subir] parou em y={y}: y_limite={y_limite}")
+            print(f"    [subir] parou em y={y}: y_limite={y_limite}")
             break
         
         # não passa topo
         if y_topo_planta is not None and ny < y_topo_planta + 3:
-            #print(f"    [subir] parou em y={y}: perto do topo da planta")
+            print(f"    [subir] parou em y={y}: perto do topo da planta")
             break
 
         # entrou em folha
         if dist[ny, nx] > raio_max:
-            #print(f"    [subir] parou em y={y}: dist={dist[ny,nx]:.1f} > raio_max={raio_max}")
+            print(f"    [subir] parou em y={y}: dist={dist[ny,nx]:.1f} > raio_max={raio_max}")
             break
         
 
@@ -346,7 +346,7 @@ def subir_no_skeleton(ponto_inicial, skeleton, mask_planta, visitados=None, raio
     return caminho, (y, x)
 
 ## IDENTIFICAÇÃO DA BASE E DO TOPO DO CAULE
-def achar_base_topo_caule(skeleton, mask_planta, topo_vaso, cx, raio_caule_max = 20, fracao_altura = 0.8):
+def achar_base_topo_caule(skeleton, mask_planta, topo_vaso, cx, raio_caule_max = 14, fracao_altura = 0.80):
     """
     Localiza dois pontos críticos no skeleton: BASE (saída do vaso) e TOPO
     (final do caule, antes da copa).
@@ -446,7 +446,7 @@ def achar_base_topo_caule(skeleton, mask_planta, topo_vaso, cx, raio_caule_max =
 
         topo = (int(ys_f[indice_topo]), int(xs_f[indice_topo]))
 
-        _, topo = subir_no_skeleton(topo, skeleton, mask_planta, raio_max=raio_caule_max, y_limite=y_limite, y_topo_planta=y_topo_planta)
+        _, topo = subir_no_skeleton(topo, skeleton, mask_planta, raio_max=raio_caule_max, passos_max=120, y_limite=y_limite, y_topo_planta=y_topo_planta)
         # debug:
         #print("fallback")
         #print(f"  fallback em y={topo[0]} (alvo={y_alvo:.0f})")
@@ -501,7 +501,7 @@ def tracar_caule(skeleton, base, topo, topo_vaso=None, mask_planta=None):
         #custo_skel = 1.0 + (dist.astype(np.float32) ** 2)
         xs = np.arange(skeleton.shape[1])[None, :]
         penalidade_x = np.abs(xs - base[1])
-        custo_skel = 1.0 + (dist.astype(np.float32) ** 2) + 2.0 * penalidade_x
+        custo_skel = 1.0 + 3.0 *  (dist.astype(np.float32) ** 2) + 2.0 * penalidade_x
 
         custo = np.where(skeleton > 0, custo_skel, 1e6).astype(np.float32)
     else:
@@ -520,7 +520,7 @@ def tracar_caule(skeleton, base, topo, topo_vaso=None, mask_planta=None):
 
         y_topo_planta = min(ys)
         h_total = topo_vaso - y_topo_planta
-        fator  = 0.85 # 0.84 é top
+        fator  = 0.88 # 0.84 é top
 
         y_alvo = topo_vaso - fator * h_total
 
@@ -548,7 +548,7 @@ def tracar_caule(skeleton, base, topo, topo_vaso=None, mask_planta=None):
 
         visitados = set((int(y), int(x)) for y, x in caminho)
 
-        extensao, _ = subir_no_skeleton(caminho[-1], skeleton, mask_planta, visitados=visitados, raio_max=15, y_limite=None, y_topo_planta=y_topo_planta)
+        extensao, _ = subir_no_skeleton(caminho[-1], skeleton, mask_planta, visitados=visitados, raio_max=13, passos_max=60, y_limite=None, y_topo_planta=y_topo_planta)
 
         caminho.extend(extensao)
 
@@ -577,12 +577,8 @@ def desenhar_caule(img, skeleton, caule, topo_vaso, base=None, topo=None):
     #  kernel = np.array(([[1, 1, 1], [1, 1, 1], [1, 1, 1]]), dtype=np.uint8)
     kernel = np.ones((3,3),np.uint8)
     skeleton_grosso = cv2.dilate(skeleton, kernel)
-    skeleton_grosso1 = cv2.resize(
-    skeleton_grosso,
-    (img_caule.shape[1], img_caule.shape[0]),
-    interpolation=cv2.INTER_NEAREST
-)
-    img_caule[skeleton_grosso1 > 0] = (200, 200, 0) # skeleton ciano
+    img_caule[skeleton_grosso > 0] = (200, 200, 0) # skeleton ciano
+
     for (y, x) in caule:
         cv2.circle(img_caule, (x, y), radius=1, color=(0, 0, 255), thickness=-1) # caule vermelho
 
@@ -590,12 +586,12 @@ def desenhar_caule(img, skeleton, caule, topo_vaso, base=None, topo=None):
     
     # debug:
     # marca base e topo do caule
-    #if base is not None:
-        #yb, xb = base
-        #cv2.circle(img_caule, (xb, yb), radius=12, color=(0, 255, 0), thickness=3)   # verde
-    #if topo is not None:
-        #yt, xt = topo
-        #cv2.circle(img_caule, (xt, yt), radius=12, color=(255, 0, 255), thickness=3) # magenta
+    if base is not None:
+        yb, xb = base
+        cv2.circle(img_caule, (xb, yb), radius=12, color=(0, 255, 0), thickness=3)   # verde
+    if topo is not None:
+        yt, xt = topo
+        cv2.circle(img_caule, (xt, yt), radius=12, color=(255, 0, 255), thickness=3) # magenta
 
         
     return img_caule

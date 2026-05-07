@@ -81,7 +81,7 @@ for k in range(1,11):
     folhas = filtrar_caule_grupos(agrupar_componentes(comps), img10.shape[1])
     estimado = len(folhas)
     cv2.imwrite(os.path.join(SAIDA, f"eucalipto{k}_contagem.png"), desenhar(img10, folhas))
-    #print(f"Eucalipto {k}: Estimado = {estimado}")
+    print(f"Eucalipto {k}: Estimado = {estimado}")
 
     ##Area da folha
 
