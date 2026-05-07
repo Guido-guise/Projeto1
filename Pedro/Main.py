@@ -4,12 +4,13 @@ from skimage.morphology import skeletonize
 import pandas as pd
 
 from Funcs import (melhorar_altura, maior_blob, extrair_planta_vaso, detecta_topo_vaso, so_a_planta, achar_base_topo_caule, tracar_caule, desenhar_caule, mede_diametro_coleto, desenha_coleto, calcula_altura_vertical)
-CAMINHO_IMAGEM = r"C:\Users\pedro\Documents\INSPER\SEM_07\VISAO\Projeto1\_Eucalipto_Escolhidos2\Eucalipto1.jpg"
 
 #RAIO_CAULE = 18 
-LARGURA_MAX_CAULE = 25 # tentar forçar um limite.
 ALTURA_PADRAO = 2000
 resultados = [] # vai virar csv
+erros_altura = []
+erros_comp = []
+erros_diam = []
 # =========================================================
 
 GABARITO = {
@@ -60,13 +61,8 @@ for k in range(1,11):
     altura_basica = calcula_altura_vertical(mask_planta_rude, topo_vaso)
     # Converter para a imagem reescalada originalmente:
     dy_alvo = 10 * F_escala
-    ####################################
-    # # Mede o diâmetro do coleto:
-    # diametro_pixels, pontos_do_coleto = mede_diametro_coleto(mask_caule, caule, topo_vaso, dy_pedido=dy_alvo)
-    ###################################33333
-    kernel_dilate_diam = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
-    mask_caule_diam = cv2.dilate(mask_planta_rude, kernel_dilate_diam)
-    diametro_pixels, pontos_do_coleto = mede_diametro_coleto(mask_caule_diam, caule, topo_vaso, dy_pedido=dy_alvo)
+    ###########################
+    diametro_pixels, pontos_do_coleto = mede_diametro_coleto(mask_planta_rude, caule, topo_vaso, dy_pedido=dy_alvo)
     ###################
     # conversões:
     altura_orig  = int(round(altura_basica / F_escala))
@@ -79,7 +75,11 @@ for k in range(1,11):
     erro_C = abs(comp_orig      - ref['comp'])   / ref['comp']   * 100
     erro_D = abs(diametro_orig  - ref['diam'])   / ref['diam']   * 100
 
-    resultados.append({'Img': k,'Altura Vert.': altura_orig,'Compr Total': comp_orig,'Diâmetro': diametro_orig,'Área': '','Nro Folhas': '',})
+    erros_altura.append(erro_A)
+    erros_comp.append(erro_C)
+    erros_diam.append(erro_D)
+
+    resultados.append({'Img': k,'Altura Vert.': altura_orig,'Compr Total': comp_orig,'Diâmetro': diametro_orig, 'Erro A %': round(erro_A, 2),'Erro C %': round(erro_C, 2),'Erro D %': round(erro_D, 2),'Área': '','Nro Folhas': '',})
 
     # # Prints no terminal dos resultados encontrados:
     # print(f"Altura básica da planta_{k}: {altura_basica} px")
@@ -120,3 +120,13 @@ df = pd.DataFrame(resultados, columns=['Img', 'Altura Vert.', 'Compr Total', 'Di
 print("\n=== Tabela final ===")
 
 print(df.to_string(index=False))
+
+# --- MAPE ---
+mape_alt  = float(np.mean(erros_altura))
+mape_comp = float(np.mean(erros_comp))
+mape_diam = float(np.mean(erros_diam))
+
+print("\n=== MAPE ===")
+print(f"Altura básica : {mape_alt:6.2f}%   (limite < 2%)        {'OK' if mape_alt  < 2  else 'FALHA'}")
+print(f"Compr total   : {mape_comp:6.2f}%   (básico < 2%, adv < 5%)  adv={'OK' if mape_comp < 5 else 'FALHA'}")
+print(f"Diâmetro      : {mape_diam:6.2f}%   (limite < 20%)       {'OK' if mape_diam < 20 else 'FALHA'}")
