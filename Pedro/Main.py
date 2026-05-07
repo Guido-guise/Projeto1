@@ -14,24 +14,21 @@ erros_diam = []
 # =========================================================
 
 GABARITO = {
-    1: dict(altura=772,  comp=697,  diam=12),
-    2: dict(altura=1179, comp=961,  diam=19),
-    3: dict(altura=1107, comp=1340, diam=21),
-    4: dict(altura=794,  comp=630,  diam=14),
-    5: dict(altura=269,  comp=75,   diam=16),
-    6: dict(altura=394,  comp=263,  diam=13),
-    7: dict(altura=1102, comp=941,  diam=16),
-    8: dict(altura=997,  comp=948,  diam=13),
-    9: dict(altura=1333, comp=1252, diam=16),
-    10: dict(altura=873, comp=610,  diam=13),
-    11: dict(altura=1039, comp=933, diam=14),
-    12: dict(altura=1547, comp=1365, diam=17),
-    13: dict(altura=273, comp=73,   diam=13),
+    1: dict(altura=1107, comp=1340, diam=21),
+    2: dict(altura=794,  comp=630,  diam=14),
+    3: dict(altura=394,  comp=263,  diam=13),
+    4: dict(altura=1102, comp=941,  diam=16),
+    5: dict(altura=997,  comp=948,  diam=13),
+    6: dict(altura=1333, comp=1252, diam=16),
+    7: dict(altura=873,  comp=610,  diam=13),
+    8: dict(altura=1039, comp=933,  diam=14),
+    9: dict(altura=1547, comp=1365, diam=17),
+    10: dict(altura=273, comp=73,   diam=13),
 }
 
 for k in range(1,11):
     # config inicial:
-    path = fr"C:\Users\pedro\Documents\INSPER\SEM_07\VISAO\Projeto1\_Eucalipto_Escolhidos2\Eucalipto{k}.jpg"
+    path = fr"C:\Users\pedro\Documents\INSPER\SEM_07\VISAO\Projeto1\Conjunto_VALIDACAO\Eucalipto{k}.jpg"
 
     img0 = cv2.imread(path)
     # pega altura original:

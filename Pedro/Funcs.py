@@ -187,7 +187,7 @@ def so_a_planta(img, topo_vaso, suavizar = True):
 ## CAMINHADA NO SKELETON
 def subir_no_skeleton(ponto_inicial, skeleton, mask_planta, visitados=None, raio_max=11, passos_max=120, y_limite = None, y_topo_planta = None):
     """
-    Caminhada gulosa subindo no skeleton a partir de um ponto.
+    Caminhada subindo no skeleton a partir de um ponto.
  
     Critérios de parada (qualquer um interrompe):
       - Sem vizinhos do skeleton ainda não visitados acima do pixel atual.
@@ -348,7 +348,7 @@ def subir_no_skeleton(ponto_inicial, skeleton, mask_planta, visitados=None, raio
     return caminho, (y, x)
 
 ## IDENTIFICAÇÃO DA BASE E DO TOPO DO CAULE
-def achar_base_topo_caule(skeleton, mask_planta, topo_vaso, cx, raio_caule_max = 14, fracao_altura = 0.80):
+def achar_base_topo_caule(skeleton, mask_planta, topo_vaso, cx, raio_caule_max = 14, fracao_altura = 0.85):
     """
     Localiza dois pontos críticos no skeleton: BASE (saída do vaso) e TOPO
     (final do caule, antes da copa).
@@ -519,7 +519,7 @@ def tracar_caule(skeleton, base, topo, topo_vaso=None, mask_planta=None):
         #custo_skel = 1.0 + (dist.astype(np.float32) ** 2)
         xs = np.arange(skeleton.shape[1])[None, :]
         penalidade_x = np.abs(xs - base[1])
-        custo_skel = 1.0 +   (dist.astype(np.float32) ** 2) + 2.0 * penalidade_x
+        custo_skel = 1.0 +   3.0 * (dist.astype(np.float32) ** 2) + 2.0 * penalidade_x
 
         custo = np.where(skeleton > 0, custo_skel, 1e6).astype(np.float32)
     else:
@@ -538,7 +538,7 @@ def tracar_caule(skeleton, base, topo, topo_vaso=None, mask_planta=None):
 
         y_topo_planta = min(ys)
         h_total = topo_vaso - y_topo_planta
-        fator  = 0.85 # corte do Dijkstra em fração da altura 
+        fator  = 0.84 # corte do Dijkstra em fração da altura 
 
         y_alvo = topo_vaso - fator * h_total
 
@@ -568,7 +568,7 @@ def tracar_caule(skeleton, base, topo, topo_vaso=None, mask_planta=None):
 
         visitados = set((int(y), int(x)) for y, x in caminho)
 
-        extensao, _ = subir_no_skeleton(caminho[-1], skeleton, mask_planta, visitados=visitados, raio_max=13, passos_max=60, y_limite=None, y_topo_planta=y_topo_planta)
+        extensao, _ = subir_no_skeleton(caminho[-1], skeleton, mask_planta, visitados=visitados, raio_max=15, passos_max=60,y_limite=None, y_topo_planta=y_topo_planta)
 
         caminho.extend(extensao)
 
@@ -587,7 +587,7 @@ def tracar_caule(skeleton, base, topo, topo_vaso=None, mask_planta=None):
             # 1.15 = ltiplicador do limiar de espessura
             # 3.5= do limiar
             # 
-            limiar = max(gross_caule * 1.15 + 2.0, gross_caule + 3.5)
+            limiar = max(gross_caule * 1.1 + 2.5, gross_caule + 3.0)
 
             n_grossos_finais = 0
             finos_consec = 0
@@ -604,7 +604,7 @@ def tracar_caule(skeleton, base, topo, topo_vaso=None, mask_planta=None):
 
             # Salvaguarda: nunca corta mais de 1/3 do caminho
             max_corte = n // 3
-            if n_grossos_finais >= 5: # gatilho para corte
+            if n_grossos_finais >= 4: # gatilho para corte
                 n_cortar = min(n_grossos_finais, max_corte)
                 caminho = caminho[:n - n_cortar]
 
@@ -764,7 +764,7 @@ def calcula_altura_vertical(mask_planta_rude, topo_vaso):
     eventual ruído — mas o `maior_blob` já garante que esse ruído não esteja
     desconectado da planta principal.
     """
-    kernel_alt = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+    kernel_alt = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5,5))
     mask_alt = cv2.dilate(mask_planta_rude, kernel_alt)
 
     ys, _ = np.where(mask_alt > 0)
